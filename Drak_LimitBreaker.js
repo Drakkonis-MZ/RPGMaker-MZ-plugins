@@ -21,18 +21,21 @@
 
 @param MaxBuff
 @parent battleParams
+@type number
 @text Buff Maximum
 @desc Maximum number of times a battler parameter can be buffed.
 @default 2
 
 @param MinBuff
 @parent battleParams
+@type number
 @text Debuff Maximum
 @desc Maximum number of times a battler parameter can be debuffed.
 @default -2
 
 @param NearDeath
 @parent battlerParams
+@type number
 @text Near Death
 @desc Percentage of max health a battler must be under to be considered near death.
 @default 25
@@ -66,7 +69,7 @@
 @parent battlerParams
 @type number
 @text Initial TP Value
-@desc Sets the amount of TP granted at the beginning of a battle. If TP Mode is fixed, it will grant this amount. If TP mode is random, it will grant up to this amount. For Fixed Variable and Random Variable, this will be the game variable used instead.
+@desc Sets the amount of TP granted at the beginning of a battle.
 @default 25
 
 @param MaxItems
@@ -107,6 +110,11 @@ whatever they want.
 All you have to do is set the parameters for whatever limits you want to
 change, and you're done! And if there are some options you don't want
 changed, the default settings correspond to MZ's original values.
+
+For Initial TP Value settings:
+If TP Mode is fixed, it will grant this amount. If TP mode is random,
+it will grant up to this amount. For Fixed Variable and Random Variable,
+this will be the game variable used for those modes instead.
 
 WARNING: This plugin will most likely not be compatible with any other
 plugins that modify these limits or how they're processed.
