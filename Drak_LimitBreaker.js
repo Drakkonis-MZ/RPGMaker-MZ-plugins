@@ -19,6 +19,34 @@
 @text ----Misc. Parameters----
 @desc These are miscellaneous parameters that don't belong in any other group.
 
+@param MaxItems
+@parent partyParams
+@type number
+@text Item Maximum
+@desc How many of a given item your party can hold.
+@default 99
+
+@param MaxGold
+@parent partyParams
+@type number
+@text Gold Maximum
+@desc How much gold the party can carry.
+@default 99999999
+
+@param MaxMem
+@parent partyParams
+@type number
+@text Battle Group Size Maximum
+@desc How many party members can be in your battle group.
+@default 4
+
+@param BenchXP
+@parent partyParams
+@type number
+@text Bench Experience Rate
+@desc Percentage of earned experience points a party member receives if they are not in the battle group.
+@default 100
+
 @param MaxBuff
 @parent battleParams
 @type number
@@ -32,6 +60,13 @@
 @text Debuff Maximum
 @desc Maximum number of times a battler parameter can be debuffed.
 @default -2
+
+@param BuffRate
+@parent battleParams
+@type number
+@text Buff Rate
+@desc Percentage that each level of buff or debuff affects battler parameters.
+@default 25
 
 @param NearDeath
 @parent battlerParams
@@ -59,8 +94,10 @@
 @type select
 @option Fixed
 @option Random
+@option Percentage
 @option Fixed Variable
 @option Random Variable
+@option Percentage Variable
 @text Initial TP Mode
 @desc Sets whether the game grants a fixed or randomized amount of TP at the beginning of battle.
 @default Random
@@ -72,33 +109,32 @@
 @desc Sets the amount of TP granted at the beginning of a battle.
 @default 25
 
-@param MaxItems
-@parent partyParams
-@type number
-@text Item Maximum
-@desc How many of a given item your party can hold.
-@default 99
-
-@param MaxGold
-@parent partyParams
-@type number
-@text Gold Maximum
-@desc How much gold the party can carry.
-@default 99999999
-
-@param MaxMem
-@parent partyParams
-@type number
-@text Party Size Maximum
-@desc How many members can be in your party.
-@default 4
-
 @param MaxSaves
 @parent miscParams
 @type number
 @text Save Slots Maximum
 @desc How many save slots your player can have.
 @default 20
+
+@param RevType
+@parent miscParams
+@type select
+@option Fixed
+@option Random
+@option Percentage
+@option Fixed Variable
+@option Random Variable
+@option Percentage Variable
+@text Revival Type
+@desc When you revive something, this determines how it chooses what HP to set the revived object to.
+@default Fixed
+
+@param RevNum
+@parent miscParams
+@type nummber
+@text Revival Value
+@desc When setting HP amount during revival, this value is used based on the chosen Revival Type.
+@default 1
 
 @help
 RPG Maker MZ comes with various hard-coded limits that the developer can't
@@ -111,10 +147,21 @@ All you have to do is set the parameters for whatever limits you want to
 change, and you're done! And if there are some options you don't want
 changed, the default settings correspond to MZ's original values.
 
-For Initial TP Value settings:
-If TP Mode is fixed, it will grant this amount. If TP mode is random,
-it will grant up to this amount. For Fixed Variable and Random Variable,
-this will be the game variable used for those modes instead.
+Initial TP Value:
+If TP Mode is Fixed, it will grant this amount. If TP Mode is Random,
+it will grant up to this amount. If TP Mode is Percentage, it will grant
+this percentage of the battler's max TP. For Fixed Variable, Percentage
+Variable, and Random Variable, this will be the game variable used for those
+modes instead.
+
+Buff and Debuff Maximum:
+This is how many times a parameter can be buffed or debuffed at once.
+
+Buff Rate:
+This is how much each buff or debuff affects the respective parameter. It
+is percentage based, so if this value is 25, a single buff gives you 25%
+extra, level two gives 50% extra, and so on. It is recommended that you set
+this to a low value if you plan to have high buff and debuff limits.
 
 WARNING: This plugin will most likely not be compatible with any other
 plugins that modify these limits or how they're processed.
@@ -122,10 +169,9 @@ plugins that modify these limits or how they're processed.
 Usage Notes: This plugin only allows changes to certain settings that the
 default editor won't give you access to. It doesn't guarantee that those
 values won't cause problems further down the line, usually display issues
-with really big numbers on things like gold and items. If you run into
-a problem like that, it's your problem to solve. I recommend toning the
-values down to something that works, or finding/writing a plugin that will
-rectify the problem. Just keep in mind that there are probably a lot of
+with really big numbers on things like gold and items. I recommend toning
+the values down to something that works, or finding/writing a plugin that
+will rectify the problem. Just keep in mind that there are probably a lot of
 things set up in MZ's default code that had the hard-coded limits in mind.
 Things might get weird when some of those limits are user-defined.
 
@@ -170,16 +216,24 @@ Drak.Param.MaxItems = parseInt(Drak.Parameters['MaxItems']);
 Drak.Param.MaxGold = parseInt(Drak.Parameters['MaxGold']);
 Drak.Param.MaxMembers = parseInt(Drak.Parameters['MaxMem']);
 Drak.Param.MaxSaves = Number(Drak.Parameters['MaxSaves']);
+Drak.Param.RevType = Drak.Parameters['RevType'];
+Drak.Param.RevNum = parseInt(Drak.Parameters['RevNum']);
+Drak.Param.BuffRate = parseInt(Drak.Parameters['BuffRate']) * .01
+Drak.Param.BenchXP = parseInt(Drak.Parameters['BenchXP']) * .01
 
-//var _MaxBuff = Game_BattlerBase.prototype.isMaxBuffAffected;
-//var _MinBuff = Game_BattlerBase.prototype.isMaxDeBuffAffected;
-//var _MaxTP = Game_BattlerBase.prototype.maxTp;
-//var _Dying = Game_BattlerBase.prototype.isDying;
-//var _OnDamage = Game_Battler.prototype.OnDamage;
-//var _initTP = Game_Battler.prototype.initTp;
-//var _MaxItems = Game_Party.prototype.maxItems;
-//var _MaxMembers = Game_Party.prototype.maxBattleMembers;
-//var _MaxSaveFiles = DataManager.maxSavefiles;
+//const _MaxBuff = Game_BattlerBase.prototype.isMaxBuffAffected;
+//const _MinBuff = Game_BattlerBase.prototype.isMaxDeBuffAffected;
+//const _MaxTP = Game_BattlerBase.prototype.maxTp;
+//const _Dying = Game_BattlerBase.prototype.isDying;
+//const _OnDamage = Game_Battler.prototype.OnDamage;
+//const _initTP = Game_Battler.prototype.initTp;
+//const _MaxItems = Game_Party.prototype.maxItems;
+//const _MaxMembers = Game_Party.prototype.maxBattleMembers;
+//const _MaxSaveFiles = DataManager.maxSavefiles;
+
+Drak.getPercent = function(value) {
+    return value * .01
+}
 
 Game_BattlerBase.prototype.isMaxBuffAffected = function(paramId) {
     return this._buffs[paramId] === Drak.Param.MaxBuff;
@@ -212,11 +266,17 @@ Game_Battler.prototype.initTp = function() {
         case 'Random':
             this.setTp(Math.randomInt(Drak.Param.TPVal));
             break;
+        case 'Percentage':
+            this.setTp(Math.trunc(Drak.getPercent(Drak.Param.TPVal) * this.maxTp()));
+            break;
         case 'Fixed Variable':
             this.setTp(Math.trunc(Number($gameVariables.value(Drak.Param.TPVal))));
             break;
         case 'Random Variable':
             this.setTp(Math.randomInt(Math.trunc(Number($gameVariables.value(Drak.Param.TPVal)))));
+            break;
+        case 'Percentage Variable':
+            this.setTp(Math.trunc(Drak.getPercent(Number($gameVariables.value(Drak.Param.TPVal)))) * this.maxTp());
             break;
     }
 };
@@ -235,4 +295,50 @@ Game_Party.prototype.maxBattleMembers = function() {
 
 DataManager.maxSavefiles = function() {
     return Drak.Param.MaxSaves;
+};
+
+Drak.LB.getRevHp = function() {
+    switch (Drak.Param.RevType) {
+        case "Fixed":
+            return Drak.Param.RevNum;
+            break;
+        case "Random":
+            return Math.randomInt(Drak.Param.RevNum);
+            break;
+        case "Percentage":
+            return Math.trunc(Drak.getPercent(Drak.Param.RevNum) * this.maxHp());
+            break;
+        case "Fixed Variable":
+            return Math.trunc($gameVariables.value(Drak.Param.RevNum));
+            break;
+        case "Random Variable":
+            return Math.randomInt(Math.trunc(Number($gameVariables.value(Drak.Param.RevNum))));
+            break;
+        case "Percentage Variable":
+            return Math.trunc(Drak.getPercent(Number($gameVariables.value(Drak.Param.RevNum)))) * this.maxHp();
+            break;
+    };
+
+    Game_Party.prototype.reviveBattleMembers = function() {
+        for (const actor of this.battleMembers()) {
+            if (actor.isDead()) {
+                actor.setHp(Drak.LB.getRevHp());
+            }
+        }
+    };
+        
+};
+
+Game_BattlerBase.prototype.revive = function() {
+    if (this._hp === 0) {
+        this._hp = Drak.LB.getRevHp();
+    }
+};
+
+Game_BattlerBase.prototype.paramBuffRate = function(paramId) {
+    return this._buffs[paramId] * Drak.getPercent(Drak.Param.BuffRate) + 1.0;
+};
+
+Game_Actor.prototype.benchMembersExpRate = function() {
+    return $dataSystem.optExtraExp ? Drak.Param.BenchXP : 0;
 };
