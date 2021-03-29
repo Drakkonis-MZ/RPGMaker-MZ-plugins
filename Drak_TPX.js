@@ -7,7 +7,7 @@
 @option Current EXP
 @option Percentage
 @text TP Guage Display
-@desc Do you want the guage to display the EXP amount, or a percentage towards the next level?
+@desc Do you want the gauge to display the EXP amount, or a percentage towards the next level?
 @default Current EXP
 */
 
@@ -39,4 +39,17 @@ Game_Actor.prototype.maxTp = function() {
 
 Game_BattlerBase.prototype.isPreserveTp = function() { //allows you to see the right amount of xp outside of battle
     return true;
+};
+
+Sprite_Gauge.prototype.drawValue = function() {
+    var val = this.currentValue();
+    if (this._battler && this._statusType == "tp" && TPX.mode == "Percentage") {
+        val += "%";
+    };
+
+    const currentValue = val;
+    const width = this.bitmapWidth();
+    const height = this.bitmapHeight();
+    this.setupValueFont();
+    this.bitmap.drawText(currentValue, 0, 0, width, height, "right");
 };
