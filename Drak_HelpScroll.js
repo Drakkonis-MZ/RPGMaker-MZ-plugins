@@ -81,7 +81,7 @@ Window_Help.prototype.initialize = function(rect) {
 };
 
 Window_Help.prototype.setText = function(text) {
-    this._text = text + text + text;
+    this._text = text;
     this.startMessage();
 };
 
