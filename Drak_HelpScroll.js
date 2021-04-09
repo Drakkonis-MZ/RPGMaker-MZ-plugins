@@ -65,7 +65,7 @@ var Imported = Imported || {};
 Imported.HelpScroll = true;
 var Drak = Drak || {};
 Drak.HelpScroll = Drak.HelpScroll || {};
-Drak.HelpScroll.version = 1.00;
+Drak.HelpScroll.version = 2.00;
 
 Drak.HelpScroll.params = PluginManager.parameters("Drak_HelpScroll");
 
