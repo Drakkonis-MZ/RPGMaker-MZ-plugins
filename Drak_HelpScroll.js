@@ -81,7 +81,7 @@ Window_Help.prototype.initialize = function(rect) {
 };
 
 Window_Help.prototype.setText = function(text) {
-    this._text = text;
+    this._text = text + text + text;
     this.startMessage();
 };
 
@@ -120,7 +120,7 @@ Window_Help.prototype.checkWrap = function(textState) {
 Window_Help.prototype.update = function() {
     Window_Base.prototype.update.call(this);
     if (this._text && this._lines > 2 && Drak.HelpScroll.params["orient"] == "Vertical") this.updateMessage();
-    if (this._text && Drak.HelpScroll.params["orient"] == "Horizontal") this.updateMessage();
+    if (this._text && this._textWidth > this.innerWidth + this.itemPadding() && Drak.HelpScroll.params["orient"] == "Horizontal") this.updateMessage();
 };
 
 Window_Help.prototype.startMessage = function() {
