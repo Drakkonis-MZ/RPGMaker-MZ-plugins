@@ -16,7 +16,9 @@ battler with a non-standard system.
 
 For each style, there are a number of parameters you can set, and any that
 are left blank will behave as they otherwise would. This means you only have
-to set what actually will be different from the normal setup.
+to set what actually will be different from the normal setup. To actually
+add a style to a battler or class, simply write "<Style:X>" in the object's
+notebox, where X is the name you define in the style's parameters.
 
 These parameters broadly fall into two groups: aesthetics, and functions.
 Aesthetic parameters have little effect other than determining how a style
