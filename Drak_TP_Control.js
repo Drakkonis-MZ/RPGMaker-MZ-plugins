@@ -269,6 +269,42 @@ Drak.TPC.checkTpChange = function(battler, tp) {
     return "none";
 };
 
+//Skill Window functions
+
+Window_SkillList.prototype.drawItem = function(index) {
+    const skill = this.itemAt(index);
+    if (skill) {
+        const costWidth = this.costWidth();
+        const rect = this.itemLineRect(index);
+        this.changePaintOpacity(this.isEnabled(skill));
+        var cw = costWidth;
+        if (this._actor.skillTpCost(skill) > 0 && this._actor.skillMpCost(skill) > 0) cw *= 2;
+        this.drawItemName(skill, rect.x, rect.y, rect.width - cw);
+        this.drawSkillCost(skill, rect.x, rect.y, rect.width);
+        this.changePaintOpacity(1);
+    }
+};
+
+Window_SkillList.prototype.drawSkillCost = function(skill, x, y, width) {
+    if (this._actor.skillTpCost(skill) > 0) {
+        var s = Drak.TPC.getStyle(this._actor);
+        s && s.nameColor ? this.changeTextColor(Drak.TPC.convertColor(s.nameColor)) : this.changeTextColor(ColorManager.tpCostColor());
+        var l = "";
+        s.shortName ? l = s.shortName : l = "TP"
+        this.drawText(this._actor.skillTpCost(skill) + l, x, y, width, "right");
+    };
+
+    if (this._actor.skillMpCost(skill) > 0) {
+        this.changeTextColor(ColorManager.mpCostColor());
+        if (this._actor.skillTpCost(skill) > 0) x -= this.costWidth();
+        this.drawText(this._actor.skillMpCost(skill) + "MP", x, y, width, "right");
+    };
+};
+
+Window_SkillList.prototype.costWidth = function() {
+    return this.textWidth("000MP");
+};
+
 //Sprite Gauge functions
 
 Sprite_Gauge.prototype.label = function() {
