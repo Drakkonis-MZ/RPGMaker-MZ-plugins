@@ -97,6 +97,10 @@ One thing to keep in mind is that a skill or state's interaction with TP
 doesn't notice or care about TP styles. Keep this in mind when dealing
 with skills or states that cost or gain TP as defined in the database,
 especially if different styles have completely unrelated mechanics.
+
+Version History:
+v1.01 - bugfix
+v1.00 - initial release
 */
 
 /*~struct~tp:
@@ -208,7 +212,7 @@ especially if different styles have completely unrelated mechanics.
 @desc This code will run when the battle ends.
 @type note
 */
-Drak = Drak || {};
+var Drak = Drak || {};
 Drak.TPC = {};
 Drak.TPC.version = 1.00;
 Drak.TPC.styles = [];
