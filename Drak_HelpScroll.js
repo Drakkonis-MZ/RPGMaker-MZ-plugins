@@ -57,6 +57,7 @@ function at the very bottom of the script to a bigger number. You'll have
 to experiment for yourself how big a number you'll need.
 
 Version History:
+v2.1 - Fixed custom line breaks using \n.
 v2.0 - Added horizontal scrolling mode.
 v1.0 - Initial release.
 */
@@ -97,6 +98,7 @@ Window_Help.prototype.refresh = function() {
 Window_Help.prototype.processCharacter = function(textState) {
     const c = textState.text[textState.index++];
     if (c.charCodeAt(0) < 0x20) {
+        //c += textState.text[textState.index + 1]
         this.flushTextState(textState);
         this.processControlCharacter(textState, c);
     } else {
@@ -178,9 +180,12 @@ Window_Help.prototype.flushTextState = function(textState) {
     this._lines += 1;
     this._textHeight = (this._lines - 2) * this.calcTextHeight(textState);
     this._textWidth = Math.max(this._textWidth, this.textWidth(this._text));
-    console.log(this._textWidth)
-    console.log(this.contents.width)
-}
+};
+
+Window_Help.prototype.processEscapeCharacter = function(code, textState) {
+    Window_Base.prototype.processEscapeCharacter.call(this, code, textState);
+    if (code == "N") this.processNewLine(textState);
+};
 
 Window_Help.prototype.updatePlacement = function() {
     const rect = this._reservedRect;
@@ -193,4 +198,4 @@ Window_Help.prototype.contentsHeight = function() {
 
 Window_Help.prototype.contentsWidth = function() {
     return 10000;
-}
+};
