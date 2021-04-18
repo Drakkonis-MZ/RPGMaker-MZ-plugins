@@ -61,17 +61,17 @@ ColorManager.getColor = function(color) {
 //assigns data arrays to $data objects from notetag blocks
 //the data array will have the same name as the notetag block
 DataManager.assignNoteBlockData = function(data, ...args) {
-    var flag = false; var key = []
+    var flag = []; var key = []
     args.forEach(a => key.push(a));
     for (i = 1; i < data.length; i++) {
         key.forEach(k => data[i][k] = [])
         var notes = data[i].note.split(/[\r\n]+/);
         notes.forEach(n =>{
-            key.forEach(k =>{
-                if (n.match(new RegExp("<(?:" + k + ")>", "i"))) flag = true; //start of block
-                else if (n.match(new RegExp("<\/(?:" + k + ")>", "i"))) flag = false; //end of block
-                else if (flag) data[i][k].push(n); //data in block
-            })
+            for (k = 0; k < key.length; k++) {
+                if (n.match(new RegExp("<(?:" + key[k] + ")>", "i"))) flag[k] = true; //start of block
+                else if (n.match(new RegExp("<\/(?:" + key[k] + ")>", "i"))) flag[k] = false; //end of block
+                else if (flag[k]) data[i][key[k]].push(n); //data in block
+            }
         })
     }
 };
