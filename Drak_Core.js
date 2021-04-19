@@ -44,15 +44,20 @@ of a number type, this function will actually provide extra work by requiring
 you to manually convert it back to a string. The assumptions are made by
 the content of the string, with no way to specify any exceptions. Also,
 any blank values are set to null. If you don't want that to happen at all,
-feel free to delete the line in question (line 85).
+feel free to delete the line in question (line 90).
+
+Version History:
+1.01 - Fixed ColorManager.getColor returning an error if a number was passed.
+1.00 - Initial release.
 */
 
 var Imported = Imported || {};
 Imported.DrakCore = true;
+var DrakCoreVersion = 1.01;
 
 //allows a color setting to be system or hex without needing separate variables, parameters, or code
 ColorManager.getColor = function(color) {
-    if (color.match(/^#[0-9A-F]{6}$/i)) return color;
+    if (isNaN(color) && color.match(/^#[0-9A-F]{6}$/i)) return color;
     var c = parseInt(color);
     if (c >= 0 && c <= 31) return ColorManager.textColor(c);
     throw new Error("Invalid color code. (" + color + ")");
@@ -98,7 +103,7 @@ DataManager.parseArray = function(ar) {
 };
 
 DataManager.parseJSON = function(json) {
-    return  DataManager.convertParam(JSON.parse(json));
+    return DataManager.convertParam(JSON.parse(json))
 };
 
 DataManager.parseObject = function(obj) {
