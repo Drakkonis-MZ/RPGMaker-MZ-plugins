@@ -1,7 +1,7 @@
 /*:
 @author Drakkonis
 @plugindesc This plugin aims to make most MZ plugins compatible with MV.
-@version 0.01
+@version 0.02
 
 @help
 -------------------------------------------------------------------------
@@ -24,10 +24,11 @@ exist in MV. The same functions exist, but are tied to the windows using
 them. The main function used is ColorManager.textColor(color), and here
 is routed to a specially created window using the default system window
 skin. The window itself is never shown and is only used for its color
-function.
+function. Most other ColorManager functions route to their MV window
+counterparts.
 
 Windows in MV are created with location and size parameters, and in MZ
-are created with a special object that contains those parameters. All
+are created with a special object that contains those parameters. Most
 window creation functions route through the base window, so RETRO uses
 that base window creation function to detect the argument style and
 converts it to MV's style if needed.
@@ -48,37 +49,65 @@ you want for those arguments in the same order the args are listed in.
 The order is IMPORTANT, since MZ handles plugin args with its own UI that
 MV doesn't have, forcing RETRO to handle the args a certain way.
 
+Basic scene construction is now functional, but they may not look identical
+to the MZ version. This is because the help window is ALWAYS drawn at the
+top of the menu screens, and there is no option in the native function
+to change its location without messing up how MV handles it on its own.
+So for now at least, any MZ plugin custom scene that normally has the
+help window on the bottom with everything else above will now have the
+help window at the top, with everything else below. HOPEFULLY this won't
+cause any issues with any custom scenes, and shouldn't if they use
+MZ's modular positioning functions, they'll just be SLIGHTLY re-arranged.
+
 Currently known incompatible features:
 
-Custom scenes are more "modular" in MZ, where in MV they are less so.
-There are a lot of functions missing as a result, and blindly adding them
-in creates a bit of a frankenstein mess. I'm still working on this bit,
-so it's not included in this release. Even so, the current strategy will
-cause at least some of the custom scenes to look different between the
-two engines even with identical plugins, but they should fit with MV's
-normal aesthetic and still be fully functional.
+I've been told that web/mobile versions of games may not be able to use
+MZ plugin commands due to the way RETRO gets the information it needs.
+I haven't tested it myself, and don't really have the means to do so on
+my own. Either way this will be addressed before the v1.0 release.
 
 PIXI - I know that MV and MZ uses different versions of PIXI, so anything
 using the newer PIXI will likely remain incompatible. TBH, I don't fully
 understand what PIXI is, so anything involving PIXI will likely either
 be outsourced or be one of the last things implemented.
+
+Version History:
+v0.02 - ColorManager more fully implemented, some scene construction
+        enabled. (4/22/21)
+v0.01 - initial unstable release (4/21/21)
 */
 
-const ColorManager = {}; //ColorManager doesn't exist at ALL in MV.
 PluginManager.MZ_commands = {}; //MZ's PluginMananger commands.
 PluginManager.args = {} //MZ's Plugin Command args.
 
 //aliased functions
 MV_PluginCommand = Game_Interpreter.prototype.pluginCommand;
 MV_WindowBase_init = Window_Base.prototype.initialize;
-MV_WindowHelp_init = Window_Help.prototype.initialize;
+MV_WindowBase_contents = Window_Base.prototype.createContents;
 
-ColorManager.textColor = function(n) {
-    this._skin = this._skin || new Window_Base();
-    return this._skin.textColor(n);
-};
-
-//plugin command functions
+//ColorManager functions
+const ColorManager = { //ColorManager doesn't exist at ALL in MV.
+    setWindowSkin() {this._skin = new Window_Base()},
+    textColor(n) {if (!this._skin) this.setWindowSkin(); return this._skin.textColor(n)},
+    normalColor() {if (!this._skin) this.setWindowSkin(); return this._skin.normalColor()},
+    systemColor() {if (!this._skin) this.setWindowSkin(); return this._skin.systemColor()},
+    crisisColor() {if (!this._skin) this.setWindowSkin(); return this._skin.crisisColor()},
+    deathColor() {if (!this._skin) this.setWindowSkin(); return this._skin.deathColor()},
+    gaugeBackColor() {if (!this._skin) this.setWindowSkin(); return this._skin.gaugeBackColor()},
+    hpGaugeColor1() {if (!this._skin) this.setWindowSkin(); return this._skin.hpGaugeColor1()},
+    hpGaugeColor2() {if (!this._skin) this.setWindowSkin(); return this._skin.hpGaugeColor2()},
+    mpGaugeColor1() {if (!this._skin) this.setWindowSkin(); return this._skin.mpGaugeColor1()},
+    mpGaugeColor2() {if (!this._skin) this.setWindowSkin(); return this._skin.mpGaugeColor2()},
+    mpCostColor() {if (!this._skin) this.setWindowSkin(); return this._skin.mpCostColor()},
+    powerUpColor() {if (!this._skin) this.setWindowSkin(); return this._skin.powerUpColor()},
+    powerDownColor() {if (!this._skin) this.setWindowSkin(); return this._skin.powerDownColor()},
+    ctGaugeColor1() {if (!this._skin) this.setWindowSkin(); return this._skin.ctGaugeColor1()},
+    ctGaugeColor2() {if (!this._skin) this.setWindowSkin(); return this._skin.ctGaugeColor2()},
+    tpGaugeColor1() {if (!this._skin) this.setWindowSkin(); return this._skin.tpGaugeColor1()},
+    tpGaugeColor2() {if (!this._skin) this.setWindowSkin(); return this._skin.tpGaugeColor()},
+    tpCostColor() {if (!this._skin) this.setWindowSkin(); return this._skin.tpCostColor()},
+    pendingColor() {if (!this._skin) this.setWindowSkin(); return this._skin.pendingColor()},
+}
 
 Game_Interpreter.prototype.pluginCommand = function(command, args) {
     var MZ_Cmd = false
@@ -95,7 +124,7 @@ PluginManager.MZ_PluginCommand = function(command, args) {
     this.MZ_commands[command].call(this, arg);
 }
 
-PluginManager.registerCommand = function(pluginName, commandName, func) { 
+PluginManager.registerCommand = function(pluginName, commandName, func) {
     this.MZ_commands[commandName] = func;
     this.getCommandArgs(pluginName, commandName)
 };
@@ -156,4 +185,60 @@ Window_Base.prototype.initialize = function(...args) {
         height = args[3];
     };
     MV_WindowBase_init.call(this, x, y, width, height);
+};
+
+Window_Base.prototype.createContents = function() {
+    MV_WindowBase_contents.call(this);
+    this.contentsBack = this.contents;
+};
+
+Window_ItemCategory.prototype.initialize = function(rect) {
+    if (rect) Window_HorzCommand.prototype.initialize.call(this, rect.x, rect.y);
+    else Window_HorzCommand.prototype.initialize.call(this, 0, 0);
+};
+
+Window_ItemCategory.prototype.needsSelection = function() {
+    return this.maxItems() >= 2;
+};
+
+function Window_Scrollable() {
+    this.initialize(...arguments);
+}
+
+Window_Scrollable.prototype = Object.create(Window_Selectable.prototype);
+Window_Scrollable.prototype.constructor = Window_Scrollable;
+
+//scene construction
+
+Scene_Base.prototype.isBottomHelpMode = function() {
+    return false;
+};
+
+Scene_Base.prototype.calcWindowHeight = function(numLines, selectable) {
+    if (selectable) return Window_Selectable.prototype.fittingHeight(numLines);
+    else return Window_Base.prototype.fittingHeight(numLines);
+};
+
+Scene_MenuBase.prototype.helpAreaTop = function() {
+    return this.isBottomHelpMode() ? this.mainAreaBottom() : 0;
+};
+
+Scene_MenuBase.prototype.helpAreaBottom = function() {
+    return this.helpAreaTop() + this.helpAreaHeight();
+};
+
+Scene_MenuBase.prototype.helpAreaHeight = function() {
+    return this.calcWindowHeight(2, false);
+};
+
+Scene_MenuBase.prototype.mainAreaTop = function() {
+    return !this.isBottomHelpMode() ? this.helpAreaBottom() : 0;
+};
+
+Scene_MenuBase.prototype.mainAreaBottom = function() {
+    return this.mainAreaTop() + this.mainAreaHeight();
+};
+
+Scene_MenuBase.prototype.mainAreaHeight = function() {
+    return Graphics.boxHeight - this.helpAreaHeight();
 };
