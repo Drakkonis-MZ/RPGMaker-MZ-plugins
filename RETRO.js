@@ -103,7 +103,7 @@ v0.02 - ColorManager more fully implemented, some scene construction
 v0.01 - initial unstable release (4/21/21)
 */
 
-const Retro = PluginManager.parameters('RetroPlug');
+const Retro = PluginManager.parameters('RETRO');
 Retro.gaugeOverride = Retro.gaugeOverride == "true";
 
 PluginManager.MZ_commands = {}; //MZ's PluginMananger commands.
