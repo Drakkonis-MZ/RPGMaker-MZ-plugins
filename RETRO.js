@@ -189,7 +189,6 @@ PluginManager.hasArgs = function(params) {
 
 PluginManager.parsePlugParams = function(pluginName) {
     var params = [];
-    var block = false;
     const fs = require('fs');
     const contents = fs.readFileSync('./js/plugins/' + pluginName + '.js').toString();
     const lines = contents.split('\n');
