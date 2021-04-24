@@ -1,7 +1,15 @@
 /*:
 @author Drakkonis
 @plugindesc This plugin aims to make most MZ plugins compatible with MV.
-@version 0.02
+@version 0.03
+
+@param gaugeOverride
+@text MZ Status Gauge Override
+@desc Decides if MZ gauge drawing functions take priority. Only affects gauges affected by MZ plugins.
+@type boolean
+@on On
+@off Off
+@default true
 
 @help
 -------------------------------------------------------------------------
@@ -59,6 +67,20 @@ help window at the top, with everything else below. HOPEFULLY this won't
 cause any issues with any custom scenes, and shouldn't if they use
 MZ's modular positioning functions, they'll just be SLIGHTLY re-arranged.
 
+Sprite_Gauge functions are implemented, but the object is different. In
+MZ, the gauges are their own independent sprites, where in MV, the gauges
+are drawn directly on the window. RETRO instead stores the gauge sprite
+information in an object for each gauge and attaches that information to
+each battler, then uses the native gauge drawing methods using that
+information. Since MV and MZ use completely separate processes for gauges
+and plugin order isn't currently detected by RETRO, it doesn't know if
+an MZ plugin that has sprite gauge functions is after, and thus "overwriting",
+an MV plugin that modifies the gauge drawing, so I've added a parameter
+to handle that. If Gauge Overwrite is turned on, RETRO checks to see if
+there is any custom sprite gauge data defined for the gauge in question.
+If there is, it uses that information to draw the gauge. Otherwise the
+native function is used.
+
 Currently known incompatible features:
 
 I've been told that web/mobile versions of games may not be able to use
@@ -66,16 +88,23 @@ MZ plugin commands due to the way RETRO gets the information it needs.
 I haven't tested it myself, and don't really have the means to do so on
 my own. Either way this will be addressed before the v1.0 release.
 
-PIXI - I know that MV and MZ uses different versions of PIXI, so anything
+PIXI - I know that MV and MZ use different versions of PIXI, so anything
 using the newer PIXI will likely remain incompatible. TBH, I don't fully
 understand what PIXI is, so anything involving PIXI will likely either
 be outsourced or be one of the last things implemented.
 
 Version History:
+v0.03 - Sprite_Gauge functions implemented, with a param to control
+        overwriting of the native gauge drawing.
+        Fixed an issue in the plugin command code that was preventing
+        the plugin manager from displaying RETRO's information.
 v0.02 - ColorManager more fully implemented, some scene construction
         enabled. (4/22/21)
 v0.01 - initial unstable release (4/21/21)
 */
+
+const Retro = PluginManager.parameters('RetroPlug');
+Retro.gaugeOverride = Retro.gaugeOverride == "true";
 
 PluginManager.MZ_commands = {}; //MZ's PluginMananger commands.
 PluginManager.args = {} //MZ's Plugin Command args.
@@ -84,6 +113,10 @@ PluginManager.args = {} //MZ's Plugin Command args.
 MV_PluginCommand = Game_Interpreter.prototype.pluginCommand;
 MV_WindowBase_init = Window_Base.prototype.initialize;
 MV_WindowBase_contents = Window_Base.prototype.createContents;
+MV_ActorGaugeHP = Window_Base.prototype.drawActorHp;
+MV_ActorGaugeMP = Window_Base.prototype.drawActorMp;
+MV_ActorGaugeTP = Window_Base.prototype.drawActorTp;
+MV_BattlerBase_init = Game_BattlerBase.prototype.initialize;
 
 //ColorManager functions
 const ColorManager = { //ColorManager doesn't exist at ALL in MV.
@@ -107,7 +140,9 @@ const ColorManager = { //ColorManager doesn't exist at ALL in MV.
     tpGaugeColor2() {if (!this._skin) this.setWindowSkin(); return this._skin.tpGaugeColor()},
     tpCostColor() {if (!this._skin) this.setWindowSkin(); return this._skin.tpCostColor()},
     pendingColor() {if (!this._skin) this.setWindowSkin(); return this._skin.pendingColor()},
-}
+};
+
+//MZ plugin command processing
 
 Game_Interpreter.prototype.pluginCommand = function(command, args) {
     var MZ_Cmd = false
@@ -122,11 +157,11 @@ PluginManager.MZ_PluginCommand = function(command, args) {
         for (i = 0; i < this.args[command].length; i++) arg[this.args[command][i]] = args[i];
     };
     this.MZ_commands[command].call(this, arg);
-}
+};
 
 PluginManager.registerCommand = function(pluginName, commandName, func) {
     this.MZ_commands[commandName] = func;
-    this.getCommandArgs(pluginName, commandName)
+    this.getCommandArgs(pluginName, commandName);
 };
 
 PluginManager.getCommandArgs = function(pluginName, commandName) {
@@ -142,7 +177,6 @@ PluginManager.getCommandArgs = function(pluginName, commandName) {
             }
         }
     }
-    console.log(this.args);
 };
 
 PluginManager.hasArgs = function(params) {
@@ -154,19 +188,19 @@ PluginManager.hasArgs = function(params) {
 };
 
 PluginManager.parsePlugParams = function(pluginName) {
-    var params = [], block = false;
+    var params = [];
+    var block = false;
     const fs = require('fs');
     const contents = fs.readFileSync('./js/plugins/' + pluginName + '.js').toString();
     const lines = contents.split('\n');
     lines.forEach(l => {
         l = l.trim();
-        if (l == "/*:") block = true;
-        else if (l == "*/") block = false;
-        else if (block) if (l.includes("@")) {
+        if (l.includes("@")) {
             if (l.charAt(0) == "*") {l = l.slice(1); l = l.trim()};
             params.push(l);
-        }
-    }); return params;
+        };
+    });
+    return params;
 };
 
 //window construction
@@ -203,7 +237,7 @@ Window_ItemCategory.prototype.needsSelection = function() {
 
 function Window_Scrollable() {
     this.initialize(...arguments);
-}
+};
 
 Window_Scrollable.prototype = Object.create(Window_Selectable.prototype);
 Window_Scrollable.prototype.constructor = Window_Scrollable;
@@ -241,4 +275,101 @@ Scene_MenuBase.prototype.mainAreaBottom = function() {
 
 Scene_MenuBase.prototype.mainAreaHeight = function() {
     return Graphics.boxHeight - this.helpAreaHeight();
+};
+
+//gauge construction
+function Sprite_Gauge() {
+    this.initialize(...arguments);
+}
+
+Sprite_Gauge.prototype = Object.create(Sprite.prototype);
+Sprite_Gauge.prototype.constructor = Sprite_Gauge;
+
+Sprite_Gauge.prototype = { //in MZ Sprite_Gauge is an actual sprite, here it merely stores the gauge's data
+    initialize(battler, type) {this._battler = battler; this._statusType = type},
+    label() {return null},
+    labelColor() {return null},
+    valueColor() {return null},
+    gaugeColor1() {return null},
+    gaugeColor2() {return null},
+    currentValue() {
+        switch (this._statusType) {
+            case "hp": return this._battler.hp;
+            case "mp": return this._battler.mp;
+            case "tp": return this._battler.tp;
+        };
+    },
+    currentMaxValue() {
+        switch (this._statusType) {
+            case "hp": return this._battler.mhp;
+            case "mp": return this._battler.mmp;
+            case "tp": return this._battler.maxTp();
+        };
+    },
+    isMod() { //if there are no Sprite_Gauge functions for this gauge, no overwrite will be processed
+        var mod = this.label();
+        if (!mod) mod = this.labelColor(); if (!mod) mod = this.valueColor();
+        if (!mod) mod = this.gaugeColor1(); if (!mod) mod = this.gaugeColor2();
+        return mod ? true : false;
+    }
+};
+
+Window_Base.prototype.drawActorHp = function(actor, x, y, width) {
+    width = width || 186;
+    if (Retro.gaugeOverride && actor.hp_gauge.isMod()) this.gaugeOverwrite(actor, x, y, width, "hp");
+    else MV_ActorGaugeHP.call(this, actor, x, y, width);
+};
+
+Window_Base.prototype.drawActorMp = function(actor, x, y, width) {
+    width = width || 186;
+    if (Retro.gaugeOverride && actor.mp_gauge.isMod()) this.gaugeOverwrite(actor, x, y, width, "mp");
+    else MV_ActorGaugeMP.call(this, actor, x, y, width);
+};
+
+Window_Base.prototype.drawActorTp = function(actor, x, y, width) {
+    width = width || 186;
+    if (Retro.gaugeOverride && actor.tp_gauge.isMod()) this.gaugeOverwrite(actor, x, y, width, "tp");
+    else MV_ActorGaugeTP.call(this, actor, x, y, width);
+};
+
+Window_Base.prototype.gaugeOverwrite = function(battler, x, y, width, type) {
+    var gColor1, gColor2, lColor, lText, vColor1, vColor2, val;
+    switch (type) {
+        case "hp":
+            gColor1 = battler.hp_gauge.gaugeColor1() || this.hpGaugeColor1();
+            gColor2 = battler.hp_gauge.gaugeColor2() || this.hpGaugeColor2();
+            lColor = battler.hp_gauge.labelColor() || this.systemColor();
+            lText = battler.hp_gauge.label() || TextManager.hpA;
+            vColor1 = battler.hp_gauge.valueColor() || this.hpColor(battler);
+            vColor2 = battler.hp_gauge.valueColor() || this.normalColor();
+            val = battler.hpRate(); break;
+        case "mp":
+            gColor1 = battler.mp_gauge.gaugeColor1() || this.mpGaugeColor1();
+            gColor2 = battler.mp_gauge.gaugeColor2() || this.mpGaugeColor2();
+            lColor = battler.mp_gauge.labelColor() || this.systemColor();
+            lText = battler.mp_gauge.label() || TextManager.mpA;
+            vColor1 = battler.mp_gauge.valueColor() || this.mpColor(battler);
+            vColor2 = battler.mp_gauge.valueColor() || this.normalColor();
+            val = battler.mpRate(); break;
+        case "tp":
+            gColor1 = battler.tp_gauge.gaugeColor1() || this.tpGaugeColor1();
+            gColor2 = battler.tp_gauge.gaugeColor2() || this.tpGaugeColor2();
+            lColor = battler.tp_gauge.labelColor() || this.systemColor();
+            lText = battler.tp_gauge.label() || TextManager.tpA;
+            vColor1 = battler.tp_gauge.valueColor() || this.tpColor(battler);
+            val = battler.tpRate(); break;
+    };
+    this.drawGauge(x, y, width, val, gColor1, gColor2);
+    this.changeTextColor(lColor);
+    this.drawText(lText, x, y, 44);
+    if (type == "hp") {this.drawCurrentAndMax(battler.hp, battler.mhp, x, y, width, vColor1, vColor2)}
+    else if (type == "mp") {this.drawCurrentAndMax(battler.mp, battler.mmp, x, y, width, vColor1, vColor2)}
+    else if (type == "tp") {this.changeTextColor(vColor1); this.drawText(battler.tp, x + width - 64, y, 64, 'right')};
+};
+
+Game_BattlerBase.prototype.initialize = function() { //adds gauge information to battlers
+    MV_BattlerBase_init.call(this);
+    this.hp_gauge = new Sprite_Gauge(this, "hp");
+    this.mp_gauge = new Sprite_Gauge(this, "mp");
+    this.tp_gauge = new Sprite_Gauge(this, "tp");
 };

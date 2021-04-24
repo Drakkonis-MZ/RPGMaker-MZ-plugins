@@ -99,6 +99,7 @@ with skills or states that cost or gain TP as defined in the database,
 especially if different styles have completely unrelated mechanics.
 
 Version History:
+v1.10 - updated to use Drak_Core
 v1.01 - bugfix
 v1.00 - initial release
 */
@@ -213,16 +214,15 @@ v1.00 - initial release
 @type note
 */
 var Drak = Drak || {};
-Drak.TPC = {};
-Drak.TPC.version = 1.00;
-Drak.TPC.styles = [];
+Drak.TPC = PluginManager.convertParams('Drak_TP_Control');
+Drak.TPC.version = 1.10;
 
 //aliases
 const gauge_label = Sprite_Gauge.prototype.label;
 const label_color = Sprite_Gauge.prototype.labelColor;
 const value_color = Sprite_Gauge.prototype.valueColor;
-const gauge_color1 = Sprite_Gauge.prototype.gaugeColor1;
-const gauge_color2 = Sprite_Gauge.prototype.gaugeColor2;
+const tp_gauge_color1 = Sprite_Gauge.prototype.gaugeColor1;
+const tp_gauge_color2 = Sprite_Gauge.prototype.gaugeColor2;
 const maxTP = Game_BattlerBase.prototype.maxTp;
 const setTP = Game_BattlerBase.prototype.setTp;
 const newTurn = Game_Troop.prototype.increaseTurn;
@@ -230,32 +230,7 @@ const endBattle = Game_Battler.prototype.onBattleEnd;
 const actorSetup = Game_Actor.prototype.setup;
 const enemySetup = Game_Enemy.prototype.setup;
 
-
-JSON.parse(PluginManager.parameters('Drak_TP_Control')['styles']).forEach(e => {
-    Drak.TPC.styles.push(JSON.parse(e));
-    var s = Drak.TPC.styles[Drak.TPC.styles.length - 1];
-    s.reset == "true" ? s.reset = true : s.reset = false;
-    s.startFull == "true" ? s.startFull = true : s.startFull = false;
-    if (s.max) s.max = JSON.parse(s.max);
-    if (s.charge) s.charge = JSON.parse(s.charge);
-    if (s.gain) s.gain = JSON.parse(s.gain);
-    if (s.loss) s.loss = JSON.parse(s.loss);
-    if (s.change) s.change = JSON.parse(s.change);
-    if (s.onMax) s.onMax = JSON.parse(s.onMax);
-    if (s.onEmpty) s.onEmpty = JSON.parse(s.onEmpty);
-    if (s.turn) s.turn = JSON.parse(s.turn);
-    if (s.regen) s.regen = JSON.parse(s.regen);
-    if (s.end) s.end = JSON.parse(s.end);
-})
-
 //Custom functions
-
-Drak.TPC.convertColor = function(color) {
-    if (color.match(/^#[0-9A-F]{6}$/i)) return color;
-    var c = parseInt(color);
-    if (c >= 0 && c <= 31) return ColorManager.textColor(c);
-    throw new Error("Invalid color code. (" + color + ")")
-};
 
 Drak.TPC.getStyle = function (battler) {
     if (battler.isActor()) {
@@ -292,7 +267,7 @@ Window_SkillList.prototype.drawItem = function(index) {
 Window_SkillList.prototype.drawSkillCost = function(skill, x, y, width) {
     if (this._actor.skillTpCost(skill) > 0) {
         var s = Drak.TPC.getStyle(this._actor);
-        s && s.nameColor ? this.changeTextColor(Drak.TPC.convertColor(s.nameColor)) : this.changeTextColor(ColorManager.tpCostColor());
+        s && s.nameColor ? this.changeTextColor(ColorManager.getColor(s.nameColor)) : this.changeTextColor(ColorManager.tpCostColor());
         var l = "";
         s.shortName ? l = s.shortName : l = "TP"
         this.drawText(this._actor.skillTpCost(skill) + l, x, y, width, "right");
@@ -322,7 +297,7 @@ Sprite_Gauge.prototype.label = function() {
 Sprite_Gauge.prototype.labelColor = function() {
     if (this._statusType == 'tp') {
         var s = Drak.TPC.getStyle(this._battler)
-        if (s && s.nameColor) return Drak.TPC.convertColor(s.nameColor);
+        if (s && s.nameColor) return ColorManager.getColor(s.nameColor);
     }
     return label_color.call(this);
 };
@@ -333,13 +308,13 @@ Sprite_Gauge.prototype.valueColor = function() {
         if (s) {
             switch (this.currentValue()) {
                 case this.currentMaxValue():
-                    if (s.valFull) return Drak.TPC.convertColor(s.valFull);
+                    if (s.valFull) return ColorManager.getColor(s.valFull);
                 case 0:
-                    if (s.valEmpty) return Drak.TPC.convertColor(s.valEmpty);
+                    if (s.valEmpty) return ColorManager.getColor(s.valEmpty);
                 default:
-                    if (s.lowNum && this.currentValue() <= (s.lowNum * .01) * this.currentMaxValue() && s.valLow) return Drak.TPC.convertColor(s.valLow);
+                    if (s.lowNum && this.currentValue() <= (s.lowNum * .01) * this.currentMaxValue() && s.valLow) return ColorManager.getColor(s.valLow);
             };
-            if (s.valNorm) return Drak.TPC.convertColor(s.valNorm);
+            if (s.valNorm) return ColorManager.getColor(s.valNorm);
         };
     };
     return value_color.call(this);
@@ -348,17 +323,17 @@ Sprite_Gauge.prototype.valueColor = function() {
 Sprite_Gauge.prototype.gaugeColor1 = function() {
     if (this._statusType == 'tp') {
         var s = Drak.TPC.getStyle(this._battler);
-        if (s && s.color1) return Drak.TPC.convertColor(s.color1);
+        if (s && s.color1) return ColorManager.getColor(s.color1);
     };
-    return gauge_color1.call(this);
+    return tp_gauge_color1.call(this);
 };
 
 Sprite_Gauge.prototype.gaugeColor2 = function() {
     if (this._statusType == 'tp') {
         var s = Drak.TPC.getStyle(this._battler);
-        if (s && s.color2) return Drak.TPC.convertColor(s.color2);
+        if (s && s.color2) return ColorManager.getColor(s.color2);
     };
-    return gauge_color2.call(this);
+    return tp_gauge_color2.call(this);
 };
 
 //Battler functions
@@ -381,9 +356,7 @@ Game_BattlerBase.prototype.maxTp = function() {
         try {
             eval(s.max);
             return max;
-        } catch {
-            throw new Error("Invalid Max TP function for TP Style " + s.name + ".")
-        };
+        } catch (e) {throw new Error("Invalid Max TP function for TP Style " + s.name + ".")};
     };
     return maxTP.call(this);
 };
@@ -396,33 +369,29 @@ Game_BattlerBase.prototype.setTp = function(tp) {
             switch (c) {
                 case "gain":
                     if (s.gain) {
-                        try {
-                            eval(s.gain)
-                        } catch {throw new Error("Invalid TP gain function for TP Style " + s.name + ".")};
+                        try {eval(s.gain)}
+                        catch (e) {throw new Error("Invalid TP gain function for TP Style " + s.name + ".")};
                     };
 
                     if (s.onMax && this.tp + tp >= this.maxTp()) {
-                        try {
-                            eval(s.onMax);
-                        } catch {throw new Error("Invalid on max TP function for TP Style " + s.name + ".")};
+                        try {eval(s.onMax)}
+                        catch (e) {throw new Error("Invalid on max TP function for TP Style " + s.name + ".")};
                     };
                 case "loss":
                     if (s.loss) {
-                        try {
-                            eval(s.loss)
-                        } catch {throw new Error("Invalid TP loss function for TP Style " + s.name + ".")};
+                        try {eval(s.loss)}
+                        catch (e) {throw new Error("Invalid TP loss function for TP Style " + s.name + ".")};
                     };
 
                     if (s.onEmpty && this.tp - tp <=0) {
-                        try {
-                            eval(s.onEmpty);
-                        } catch {throw new Error("Invalid on empty TP function for TP Style " + s.name + ".")};
+                        try {eval(s.onEmpty)}
+                        catch (e) {throw new Error("Invalid on empty TP function for TP Style " + s.name + ".")};
                     }
             };
             if (s.change) {
                 try {
                     eval(s.change)
-                } catch {throw new Error("Invalid TP change function for TP Style " + s.name + ".")};
+                } catch (e) {throw new Error("Invalid TP change function for TP Style " + s.name + ".")};
             }
         }
     }
@@ -444,17 +413,14 @@ Game_Actor.prototype.isPreserveTp = function() {
 Game_Battler.prototype.regenerateTp = function() {
     var value = 0; s = Drak.TPC.getStyle(this);
     if (s && s.regen) {
-        try {
-            eval(s.regen)
-        } catch {throw new Error("Invalid regeneration function for TP Style " + s.name + ".")};
-    } else value = this.maxTp()
+        try {eval(s.regen)}
+        catch (e) {throw new Error("Invalid regeneration function for TP Style " + s.name + ".")}} 
+    else value = this.maxTp();
     value = Math.floor(value * this.trg);
     this.gainSilentTp(value);
 };
 
-Game_Battler.prototype.gainSilentTp = function(value) {
-    setTP.call(this, this.tp + value);
-};
+Game_Battler.prototype.gainSilentTp = function(value) {setTP.call(this, this.tp + value)};
 
 //Battle flow functions
 
@@ -466,7 +432,7 @@ Game_Troop.prototype.increaseTurn = function() {
         if (s && s.turn) {
             try {
                 eval(s.turn);
-            } catch {throw new Error("Invalid new turn function for TP Style " + s.name + ".")};
+            } catch (e) {throw new Error("Invalid new turn function for TP Style " + s.name + ".")};
         };
     });
 };
@@ -474,9 +440,8 @@ Game_Troop.prototype.increaseTurn = function() {
 Game_Battler.prototype.onBattleEnd = function() {
     var s = Drak.TPC.getStyle(this);
     if (s && s.end) {
-        try {
-            eval(s.end);
-        } catch {throw new Error("Invalid end of battle function for TP Style " + s.name + ".")};
+        try {eval(s.end)}
+        catch (e) {throw new Error("Invalid end of battle function for TP Style " + s.name + ".")};
     }
     endBattle.call(this);
 };
