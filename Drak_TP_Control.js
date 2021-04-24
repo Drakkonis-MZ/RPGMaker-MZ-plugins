@@ -269,7 +269,7 @@ Window_SkillList.prototype.drawSkillCost = function(skill, x, y, width) {
         var s = Drak.TPC.getStyle(this._actor);
         s && s.nameColor ? this.changeTextColor(ColorManager.getColor(s.nameColor)) : this.changeTextColor(ColorManager.tpCostColor());
         var l = "";
-        s.shortName ? l = s.shortName : l = "TP"
+        s && s.shortName ? l = s.shortName : l = "TP"
         this.drawText(this._actor.skillTpCost(skill) + l, x, y, width, "right");
     };
 
