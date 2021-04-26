@@ -1,7 +1,7 @@
 /*:
 @author Drakkonis
 @plugindesc This plugin aims to make most MZ plugins compatible with MV.
-@version 0.03
+@version 0.04
 
 @param gaugeOverride
 @text MZ Status Gauge Override
@@ -93,11 +93,24 @@ using the newer PIXI will likely remain incompatible. TBH, I don't fully
 understand what PIXI is, so anything involving PIXI will likely either
 be outsourced or be one of the last things implemented.
 
+To Do: These aren't on the immediate agenda, but will be worked on later.
+    Store all MZ plugin params in a fully structured object on boot.
+    Add support for MZ plugin commands with spaces in their names.
+    Detect proper plugin "overwrite" order for related functions that
+        are handled VERY differently between engines(like stat gauges).
+
 Version History:
+v0.04 - Fixed a small bug with the updated plugin command code.
+        Added ImageManager.icon size data.
+        EquipSlot.drawItem now passes width to drawItemName.
+        Added MZ's textState functions.
+        Fixed help window positioning without breaking the native one.
+        Implemented a function to see if an MZ plugin is calling a shared
+        function. Sometimes they pass different arguments. (4/26/21)
 v0.03 - Sprite_Gauge functions implemented, with a param to control
         overwriting of the native gauge drawing.
         Fixed an issue in the plugin command code that was preventing
-        the plugin manager from displaying RETRO's information.
+        the plugin manager from displaying RETRO's information. (4/23/21)
 v0.02 - ColorManager more fully implemented, some scene construction
         enabled. (4/22/21)
 v0.01 - initial unstable release (4/21/21)
@@ -111,12 +124,27 @@ PluginManager.args = {} //MZ's Plugin Command args.
 
 //aliased functions
 MV_PluginCommand = Game_Interpreter.prototype.pluginCommand;
+MV_MenuBase_help = Scene_MenuBase.prototype.createHelpWindow;
 MV_WindowBase_init = Window_Base.prototype.initialize;
 MV_WindowBase_contents = Window_Base.prototype.createContents;
+MV_WindowHelp_init = Window_Help.prototype.initialize;
 MV_ActorGaugeHP = Window_Base.prototype.drawActorHp;
 MV_ActorGaugeMP = Window_Base.prototype.drawActorMp;
 MV_ActorGaugeTP = Window_Base.prototype.drawActorTp;
 MV_BattlerBase_init = Game_BattlerBase.prototype.initialize;
+MV_EquipDrawItem = Window_EquipSlot.prototype.drawItem;
+MV_procNormChar = Window_Base.prototype.processNormalCharacter;
+
+//completely custom functions
+Retro.findCaller = function() { //figures out exactly WHAT has called the function that this function was called from
+    const err = new Error(); var file = "";
+    stack = err.stack.split("at "); stack.shift();
+    for (i = 0; i < stack.length; i++) {
+        file = stack[i].slice(stack[i].indexOf("/js/") + 4, stack[i].indexOf(".js"))
+        file.substring(0,7) == "plugins" ? file = file.slice(8) : file = "MV"; //determines if MV or a plugin was the caller
+        if (file !== "RETRO") return file; //we're not looking for RETRO as a caller
+    };
+};
 
 //ColorManager functions
 const ColorManager = { //ColorManager doesn't exist at ALL in MV.
@@ -137,7 +165,7 @@ const ColorManager = { //ColorManager doesn't exist at ALL in MV.
     ctGaugeColor1() {if (!this._skin) this.setWindowSkin(); return this._skin.ctGaugeColor1()},
     ctGaugeColor2() {if (!this._skin) this.setWindowSkin(); return this._skin.ctGaugeColor2()},
     tpGaugeColor1() {if (!this._skin) this.setWindowSkin(); return this._skin.tpGaugeColor1()},
-    tpGaugeColor2() {if (!this._skin) this.setWindowSkin(); return this._skin.tpGaugeColor()},
+    tpGaugeColor2() {if (!this._skin) this.setWindowSkin(); return this._skin.tpGaugeColor2()},
     tpCostColor() {if (!this._skin) this.setWindowSkin(); return this._skin.tpCostColor()},
     pendingColor() {if (!this._skin) this.setWindowSkin(); return this._skin.pendingColor()},
 };
@@ -187,6 +215,11 @@ PluginManager.hasArgs = function(params) {
     };
 };
 
+PluginManager.isForMZ = function(pluginName) {
+    const data = this.parsePlugParams(pluginName); var c = false;
+    data.forEach(d => {if (d.includes("@target") && d.includes("MZ")) c =  true}); return c;
+};
+
 PluginManager.parsePlugParams = function(pluginName) {
     var params = [];
     const fs = require('fs');
@@ -196,7 +229,7 @@ PluginManager.parsePlugParams = function(pluginName) {
         l = l.trim();
         if (l.includes("@")) {
             if (l.charAt(0) == "*") {l = l.slice(1); l = l.trim()};
-            params.push(l);
+            if (l.charAt(0) == "@") params.push(l);
         };
     });
     return params;
@@ -204,26 +237,29 @@ PluginManager.parsePlugParams = function(pluginName) {
 
 //window construction
 
+Game_System.prototype.windowPadding = function() {return Window_Base.prototype.standardPadding()};
+Window.prototype.addInnerChild = function(child) {this.addChildToBack(child)};
+
 Window_Base.prototype.initialize = function(...args) {
     var x, y, width, height;
     if (typeof args[0] == 'object') { //this is an MZ window init call
-        x = args[0].x;
-        y = args[0].y;
-        width = args[0].width;
-        height = args[0].height;
+        x = args[0].x; y = args[0].y; width = args[0].width; height = args[0].height;
     } else { //this is an MV window init call
-        x = args[0];
-        y = args[1];
-        width = args[2];
-        height = args[3];
+        x = args[0]; y = args[1]; width = args[2]; height = args[3];
     };
     MV_WindowBase_init.call(this, x, y, width, height);
 };
 
-Window_Base.prototype.createContents = function() {
-    MV_WindowBase_contents.call(this);
-    this.contentsBack = this.contents;
+Window_Base.prototype.createContents = function() {MV_WindowBase_contents.call(this); this.contentsBack = this.contents};
+
+Window_Help.prototype.initialize = function(numLines) {
+    if (typeof(numLines) == "object") {//if object, an MZ scene is creating this window and may need it moved from default
+        Window_Base.prototype.initialize.call(this, numLines); this._text = '';
+    } else MV_WindowHelp_init.call(this, numLines);
 };
+
+Window_Selectable.prototype.itemRectWithPadding = function(index) {return this.itemRectForText(index)};
+Window_Selectable.prototype.itemAt = function(index) {return this.item(index)};
 
 Window_ItemCategory.prototype.initialize = function(rect) {
     if (rect) Window_HorzCommand.prototype.initialize.call(this, rect.x, rect.y);
@@ -234,17 +270,21 @@ Window_ItemCategory.prototype.needsSelection = function() {
     return this.maxItems() >= 2;
 };
 
-function Window_Scrollable() {
-    this.initialize(...arguments);
+Window_EquipSlot.prototype.drawItem = function(index) {//MV doesn't pass a width to drawItemName, MZ does.
+    MV_EquipDrawItem.call(this, index);
+    if (this._actor) {var rect = this.itemRectForText(index);
+        this.drawItemName(this._actor.equips()[index], rect.x + 138, rect.y, rect.width);
+    };
 };
 
-Window_Scrollable.prototype = Object.create(Window_Selectable.prototype);
-Window_Scrollable.prototype.constructor = Window_Scrollable;
+function Window_Scrollable() {this.initialize(...arguments)};
+
+Window_Scrollable.prototype = Object.create(Window_Selectable.prototype); Window_Scrollable.prototype.constructor = Window_Scrollable;
 
 //scene construction
 
 Scene_Base.prototype.isBottomHelpMode = function() {
-    return false;
+    return true;
 };
 
 Scene_Base.prototype.calcWindowHeight = function(numLines, selectable) {
@@ -276,21 +316,32 @@ Scene_MenuBase.prototype.mainAreaHeight = function() {
     return Graphics.boxHeight - this.helpAreaHeight();
 };
 
-//gauge construction
-function Sprite_Gauge() {
-    this.initialize(...arguments);
-}
+Scene_MenuBase.prototype.helpWindowRect = function() {
+    const wx = 0;
+    const wy = this.helpAreaTop();
+    const ww = Graphics.boxWidth;
+    const wh = this.helpAreaHeight();
+    return new Rectangle(wx, wy, ww, wh);
+};
 
-Sprite_Gauge.prototype = Object.create(Sprite.prototype);
-Sprite_Gauge.prototype.constructor = Sprite_Gauge;
+Scene_MenuBase.prototype.createHelpWindow = function() {
+    const caller = Retro.findCaller();
+    if (caller !== "MV") {if (PluginManager.isForMZ(caller)) {
+        this._helpWindow = new Window_Help(this.helpWindowRect());
+        this.addWindow(this._helpWindow);
+    } else MV_MenuBase_help.call(this)}
+    else MV_MenuBase_help.call(this);
+};
+
+//gauge construction
+function Sprite_Gauge() {this.initialize(...arguments)};
+
+Sprite_Gauge.prototype = Object.create(Sprite.prototype); Sprite_Gauge.prototype.constructor = Sprite_Gauge;
 
 Sprite_Gauge.prototype = { //in MZ Sprite_Gauge is an actual sprite, here it merely stores the gauge's data
     initialize(battler, type) {this._battler = battler; this._statusType = type},
-    label() {return null},
-    labelColor() {return null},
-    valueColor() {return null},
-    gaugeColor1() {return null},
-    gaugeColor2() {return null},
+    label() {return null}, labelColor() {return null}, valueColor() {return null},
+    gaugeColor1() {return null}, gaugeColor2() {return null},
     currentValue() {
         switch (this._statusType) {
             case "hp": return this._battler.hp;
@@ -359,8 +410,7 @@ Window_Base.prototype.gaugeOverwrite = function(battler, x, y, width, type) {
             val = battler.tpRate(); break;
     };
     this.drawGauge(x, y, width, val, gColor1, gColor2);
-    this.changeTextColor(lColor);
-    this.drawText(lText, x, y, 44);
+    this.changeTextColor(lColor); this.drawText(lText, x, y, 44);
     if (type == "hp") {this.drawCurrentAndMax(battler.hp, battler.mhp, x, y, width, vColor1, vColor2)}
     else if (type == "mp") {this.drawCurrentAndMax(battler.mp, battler.mmp, x, y, width, vColor1, vColor2)}
     else if (type == "tp") {this.changeTextColor(vColor1); this.drawText(battler.tp, x + width - 64, y, 64, 'right')};
@@ -371,4 +421,57 @@ Game_BattlerBase.prototype.initialize = function() { //adds gauge information to
     this.hp_gauge = new Sprite_Gauge(this, "hp");
     this.mp_gauge = new Sprite_Gauge(this, "mp");
     this.tp_gauge = new Sprite_Gauge(this, "tp");
+};
+
+//various graphics-related stuff
+
+ImageManager.iconWidth = Window_Base._iconWidth; //MZ stores icon size in ImageManager, not the base window.
+ImageManager.iconHeight = Window_Base._iconHeight;
+Sprite.prototype.hide = function() {this.visible = false}; Sprite.prototype.show = function() {this.visible = true};
+
+//MZ's textState handling. Will eventually try to trim down if possible. Was copied wholesale from MZ functions.
+
+Window_Base.prototype.createTextState = function(text, x, y, width) {
+    const rtl = Utils.containsArabic(text); const textState = {};
+    textState.text = this.convertEscapeCharacters(text); textState.index = 0;
+    textState.x = rtl ? x + width : x; textState.y = y;
+    textState.width = width; textState.height = this.calcTextHeight(textState);
+    textState.startX = textState.x; textState.startY = textState.y;
+    textState.rtl = rtl; textState.buffer = this.createTextBuffer(rtl);
+    textState.drawing = true; textState.outputWidth = 0; textState.outputHeight = 0;
+    console.log(PluginManager.isForMZ(Retro.findCaller()))
+    return textState;
+};
+
+Utils.containsArabic = function(str) {const regExp = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/; return regExp.test(str)};
+Window_Base.prototype.createTextBuffer = function(rtl) {return rtl ? "\u202B" : ""};
+
+Window_Base.prototype.textSizeEx = function(text) {
+    this.resetFontSettings();
+    const textState = this.createTextState(text, 0, 0, 0); textState.drawing = false;
+    this.processAllText(textState);
+    return { width: textState.outputWidth, height: textState.outputHeight };
+};
+
+Window_Base.prototype.flushTextState = function(textState) {
+    const text = textState.buffer; const rtl = textState.rtl;
+    const width = this.textWidth(text); const height = textState.height;
+    const x = rtl ? textState.x - width : textState.x; const y = textState.y;
+    if (textState.drawing) {this.contents.drawText(text, x, y, width, height)};
+    textState.x += rtl ? -width : width; textState.buffer = this.createTextBuffer(rtl);
+    const outputWidth = Math.abs(textState.x - textState.startX);
+    if (textState.outputWidth < outputWidth) {textState.outputWidth = outputWidth};
+    textState.outputHeight = y - textState.startY + height;
+};
+
+Window_Base.prototype.processControlCharacter = function(textState, c) {
+    if (c === "\n") {this.processNewLine(textState)};
+    if (c === "\x1b") {const code = this.obtainEscapeCode(textState); this.processEscapeCharacter(code, textState)};
+};
+
+Window_Base.prototype.processNormalCharacter = function(textState) {
+    if (textState.hasOwnProperty("drawing") && textState.drawing == false) {//MZ sometimes processes textState data without drawing it.
+        var c = textState.text[textState.index++]; var w = this.textWidth(c);
+        textState.x += w;
+    } else MV_procNormChar.call(this, textState);
 };
