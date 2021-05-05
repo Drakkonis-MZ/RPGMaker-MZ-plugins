@@ -1,7 +1,7 @@
 /*:
 @author Drakkonis
 @plugindesc This plugin aims to make most MZ plugins compatible with MV.
-@version 0.04
+@version 0.05
 
 @param gaugeOverride
 @text MZ Status Gauge Override
@@ -47,25 +47,24 @@ certain lines in the code of the plugin they wish to use. In the comment
 block at the top of a plugin, the author will list various parameters
 using "@". For any plugin with commands, they will have those commands
 listed with "@command". When using MV's plugin command feature, this is
-the command name you'll type in. If the command has arguments, they are
-listed below the command with "@arg". You MIGHT need to look at the
-entire arg parameter or even the function the command calls to make sure
-you know what the arg should be(for example, if they are pre-set options,
-and especially if the text of the option differs from its actual value).
-Also take note of the order the args are listed in. Then type the values
-you want for those arguments in the same order the args are listed in.
-The order is IMPORTANT, since MZ handles plugin args with its own UI that
-MV doesn't have, forcing RETRO to handle the args a certain way.
+the command name you'll type in, ommitting any spaces. If the command has
+arguments, they are listed below the command with "@arg". You MIGHT need
+to look at the entire arg parameter or even the function the command calls
+to make sure you know what the arg should be(for example, if they are
+pre-set options, and especially if the text of the option differs from
+its actual value). Also take note of the order the args are listed in.
+Then type the values you want for those arguments in the same order the
+args are listed in. The order is IMPORTANT, since MZ handles plugin args
+with its own UI that MV doesn't have, forcing RETRO to handle the args a
+certain way.
 
-Basic scene construction is now functional, but they may not look identical
-to the MZ version. This is because the help window is ALWAYS drawn at the
-top of the menu screens, and there is no option in the native function
-to change its location without messing up how MV handles it on its own.
-So for now at least, any MZ plugin custom scene that normally has the
-help window on the bottom with everything else above will now have the
-help window at the top, with everything else below. HOPEFULLY this won't
-cause any issues with any custom scenes, and shouldn't if they use
-MZ's modular positioning functions, they'll just be SLIGHTLY re-arranged.
+You'll also need the plugin's name, so that the function knows which
+plugin to use, since some plugins may have the same command names. This
+is done using "plugin name"/"command name", with args listed after as
+normal. The plugin name and command name MUST be without spaces, separated
+by a forward slash.
+
+Basic scene construction is now functional.
 
 Sprite_Gauge functions are implemented, but the object is different. In
 MZ, the gauges are their own independent sprites, where in MV, the gauges
@@ -94,12 +93,14 @@ understand what PIXI is, so anything involving PIXI will likely either
 be outsourced or be one of the last things implemented.
 
 To Do: These aren't on the immediate agenda, but will be worked on later.
-    Store all MZ plugin params in a fully structured object on boot.
-    Add support for MZ plugin commands with spaces in their names.
     Detect proper plugin "overwrite" order for related functions that
         are handled VERY differently between engines(like stat gauges).
 
 Version History:
+v0.05 - Overhauled MZ plugin command functions.
+        Implemented MZ sprite hue changes.
+        Fixed an issue with stat gauges that would cause a crash after
+        loading a save file. (5/5/21)
 v0.04 - Fixed a small bug with the updated plugin command code.
         Added ImageManager.icon size data.
         EquipSlot.drawItem now passes width to drawItemName.
@@ -118,11 +119,12 @@ v0.01 - initial unstable release (4/21/21)
 
 const Retro = PluginManager.parameters('RETRO');
 Retro.gaugeOverride = Retro.gaugeOverride == "true";
+Retro.MZPlugins = {}; //MZ plugin command information
 
-PluginManager.MZ_commands = {}; //MZ's PluginMananger commands.
-PluginManager.args = {} //MZ's Plugin Command args.
+PluginManager.MZ_commands = {}; //Plugin command information from MZ's registerCommand.
 
-//aliased functions
+//aliased functions for general compatibility
+MV_SceneBoot_title = Scene_Boot.prototype.updateDocumentTitle;
 MV_PluginCommand = Game_Interpreter.prototype.pluginCommand;
 MV_MenuBase_help = Scene_MenuBase.prototype.createHelpWindow;
 MV_WindowBase_init = Window_Base.prototype.initialize;
@@ -133,9 +135,57 @@ MV_ActorGaugeMP = Window_Base.prototype.drawActorMp;
 MV_ActorGaugeTP = Window_Base.prototype.drawActorTp;
 MV_BattlerBase_init = Game_BattlerBase.prototype.initialize;
 MV_EquipDrawItem = Window_EquipSlot.prototype.drawItem;
-MV_procNormChar = Window_Base.prototype.processNormalCharacter;
+MV_ProcNormChar = Window_Base.prototype.processNormalCharacter;
+MV_ImageManager_loadNormBit = ImageManager.loadNormalBitmap;
+MV_SceneBoot_start = Scene_Boot.prototype.start;
+
+//aliased functions for specific plugin compatibility
+MV_WindowBase_textColor = Window_Base.prototype.textColor;
 
 //completely custom functions
+
+Retro.getPluginData = function(plugin) {
+    const params = this.parsePlugin(plugin); var data = {}, MZ = false, cmd = "", arg = "";
+    while (params.length > 0) {
+        if (params[0].includes("@target" && "MZ")) MZ = true, params.shift();
+        else if (params[0].includes("@command")) {range = this.getRange(params);
+            while (range > 0) {
+                switch (params[0].slice(0, 4)) {
+                    case "@com": cmd = params[0].slice(9).replace(/\s+/g, ""); data[cmd] = {};
+                        data[cmd].func = PluginManager.MZ_commands[plugin][cmd];
+                        data[cmd].args = []; data[cmd].defs = {}; break;
+                    case "@arg": arg = params[0].slice(5); data[cmd].args.push(arg); break;
+                    case "@def": data[cmd].defs[arg] = params[0].slice(9); break;
+                }; range--; params.shift();
+            };
+        } else params.shift();
+    }; if (MZ) Retro.MZPlugins[plugin] = data, MZ = false;
+};
+
+Retro.parsePlugin = function(pluginName) {
+    var params = [];
+    const fs = require('fs');
+    const contents = fs.readFileSync('./js/plugins/' + pluginName + '.js').toString();
+    const lines = contents.split('\n');
+    lines.forEach(l => {
+        l = l.trim();
+        if (l.includes("@")) {
+            if (l.charAt(0) == "*") {l = l.slice(1); l = l.trim()};
+            if (l.charAt(0) == "@") params.push(l);
+        } else if (l.includes("/")) {
+            if (l.indexOf("/") !== 0 && l.charAt(l.indexOf("/") - 1) == "*") delete lines; return params; //end of non-structure section
+        }
+    }); return params;
+};
+
+Retro.getRange = function(params) {
+    var range = 1; 
+    for (i = 1; i < params.length; i++) {
+        if (params[i].includes("@help") || params[i].includes("@param") || params[i].includes("@command")) return range
+        else range++
+    }; return range;
+};
+
 Retro.findCaller = function() { //figures out exactly WHAT has called the function that this function was called from
     const err = new Error(); var file = "";
     stack = err.stack.split("at "); stack.shift();
@@ -145,6 +195,8 @@ Retro.findCaller = function() { //figures out exactly WHAT has called the functi
         if (file !== "RETRO") return file; //we're not looking for RETRO as a caller
     };
 };
+
+Retro.isForMZ = function(pluginName) {return Retro.MZPlugins.hasOwnProperty(pluginName)};
 
 //ColorManager functions
 const ColorManager = { //ColorManager doesn't exist at ALL in MV.
@@ -172,73 +224,45 @@ const ColorManager = { //ColorManager doesn't exist at ALL in MV.
 
 //MZ plugin command processing
 
+Scene_Boot.prototype.updateDocumentTitle = function() {//best place I could find for this, thanks to CGMZ_Core.
+    MV_SceneBoot_title.call(this); PluginManager._scripts.forEach(p =>{Retro.getPluginData(p);})
+};
+
 Game_Interpreter.prototype.pluginCommand = function(command, args) {
     var MZ_Cmd = false
-    for (k of Object.keys(PluginManager.MZ_commands)) if (k == command) MZ_Cmd = true;
+    if (command.includes("/")) MZ_Cmd = true;
     if (MZ_Cmd) PluginManager.MZ_PluginCommand(command, args);
     else MV_PluginCommand.call(this, command, args);
 };
 
 PluginManager.MZ_PluginCommand = function(command, args) {
-    if (this.args[command]) {
-        arg = {};
-        for (i = 0; i < this.args[command].length; i++) arg[this.args[command][i]] = args[i];
-    };
-    this.MZ_commands[command].call(this, arg);
+    command = command.split("/"); command = Retro.MZPlugins[command[0]][command[1]];
+    if (command.args.length > 0) {arg = {};
+        for (i = 0; i < command.args.length; i++) args[i] ? arg[command.args[i]] = args[i] : arg[command.args[i]] = command.defs[command.args[i]];
+    }; command.func.call(this, arg);
 };
 
 PluginManager.registerCommand = function(pluginName, commandName, func) {
-    this.MZ_commands[commandName] = func;
-    this.getCommandArgs(pluginName, commandName);
-};
-
-PluginManager.getCommandArgs = function(pluginName, commandName) {
-    var params = this.parsePlugParams(pluginName);
-    while (params[0] !== "@command " + commandName) {params.shift(); if (params.length == 0) break};
-    if (this.hasArgs(params)) {
-        this.args[commandName] = [];
-        while (params.length > 0) {
-            while (!params[0].includes("@arg")) {params.shift(); if (params.length == 0) break};
-            if (params.length > 0) {
-                this.args[commandName].push([params[0].split(" ")[1]]);
-                params.shift();
-            }
-        }
-    }
-};
-
-PluginManager.hasArgs = function(params) {
-    for (i = 1; i < params.length; i++) {
-        if (params[i].includes("@arg")) return true;
-        if (params[i].includes("@command")) return false;
-        if (params[i].includes("@param")) return false;
-    };
-};
-
-PluginManager.isForMZ = function(pluginName) {
-    const data = this.parsePlugParams(pluginName); var c = false;
-    data.forEach(d => {if (d.includes("@target") && d.includes("MZ")) c =  true}); return c;
-};
-
-PluginManager.parsePlugParams = function(pluginName) {
-    var params = [];
-    const fs = require('fs');
-    const contents = fs.readFileSync('./js/plugins/' + pluginName + '.js').toString();
-    const lines = contents.split('\n');
-    lines.forEach(l => {
-        l = l.trim();
-        if (l.includes("@")) {
-            if (l.charAt(0) == "*") {l = l.slice(1); l = l.trim()};
-            if (l.charAt(0) == "@") params.push(l);
-        };
-    });
-    return params;
+    this.MZ_commands[pluginName] = this.MZ_commands[pluginName] || {};
+    this.MZ_commands[pluginName][commandName.replace(/\s+/g, '')] = func;
 };
 
 //window construction
 
 Game_System.prototype.windowPadding = function() {return Window_Base.prototype.standardPadding()};
 Window.prototype.addInnerChild = function(child) {this.addChildToBack(child)};
+
+Object.defineProperty(Window.prototype, "innerRect", {
+    get: function() {
+        return new Rectangle(
+            this.padding,
+            this.padding,
+            this.contentsWidth(),
+            this.contentsHeight()
+        );
+    },
+    configurable: true
+});
 
 Window_Base.prototype.initialize = function(...args) {
     var x, y, width, height;
@@ -259,16 +283,17 @@ Window_Help.prototype.initialize = function(numLines) {
 };
 
 Window_Selectable.prototype.itemRectWithPadding = function(index) {return this.itemRectForText(index)};
-Window_Selectable.prototype.itemAt = function(index) {return this.item(index)};
+Window_Selectable.prototype.itemAt = function(index) {return this._data[index]};
+Window_Selectable.prototype.itemLineRect = function(index) {
+    rect = this.itemRect(index); rect.width -= this.textPadding(); return rect;
+};
 
 Window_ItemCategory.prototype.initialize = function(rect) {
     if (rect) Window_HorzCommand.prototype.initialize.call(this, rect.x, rect.y);
     else Window_HorzCommand.prototype.initialize.call(this, 0, 0);
 };
 
-Window_ItemCategory.prototype.needsSelection = function() {
-    return this.maxItems() >= 2;
-};
+Window_ItemCategory.prototype.needsSelection = function() {return this.maxItems() >= 2};
 
 Window_EquipSlot.prototype.drawItem = function(index) {//MV doesn't pass a width to drawItemName, MZ does.
     MV_EquipDrawItem.call(this, index);
@@ -283,54 +308,31 @@ Window_Scrollable.prototype = Object.create(Window_Selectable.prototype); Window
 
 //scene construction
 
-Scene_Base.prototype.isBottomHelpMode = function() {
-    return true;
-};
-
 Scene_Base.prototype.calcWindowHeight = function(numLines, selectable) {
     if (selectable) return Window_Selectable.prototype.fittingHeight(numLines);
     else return Window_Base.prototype.fittingHeight(numLines);
 };
 
-Scene_MenuBase.prototype.helpAreaTop = function() {
-    return this.isBottomHelpMode() ? this.mainAreaBottom() : 0;
-};
-
-Scene_MenuBase.prototype.helpAreaBottom = function() {
-    return this.helpAreaTop() + this.helpAreaHeight();
-};
-
-Scene_MenuBase.prototype.helpAreaHeight = function() {
-    return this.calcWindowHeight(2, false);
-};
-
-Scene_MenuBase.prototype.mainAreaTop = function() {
-    return !this.isBottomHelpMode() ? this.helpAreaBottom() : 0;
-};
-
-Scene_MenuBase.prototype.mainAreaBottom = function() {
-    return this.mainAreaTop() + this.mainAreaHeight();
-};
-
-Scene_MenuBase.prototype.mainAreaHeight = function() {
-    return Graphics.boxHeight - this.helpAreaHeight();
-};
+Scene_Base.prototype.isBottomHelpMode = function() {return true};
+Scene_MenuBase.prototype.helpAreaTop = function() {return this.isBottomHelpMode() ? this.mainAreaBottom() : 0};
+Scene_MenuBase.prototype.helpAreaBottom = function() {return this.helpAreaTop() + this.helpAreaHeight()};
+Scene_MenuBase.prototype.helpAreaHeight = function() {return this.calcWindowHeight(2, false)};
+Scene_MenuBase.prototype.mainAreaTop = function() {return !this.isBottomHelpMode() ? this.helpAreaBottom() : 0};
+Scene_MenuBase.prototype.mainAreaBottom = function() {return this.mainAreaTop() + this.mainAreaHeight()};
+Scene_MenuBase.prototype.mainAreaHeight = function() {return Graphics.boxHeight - this.helpAreaHeight()};
 
 Scene_MenuBase.prototype.helpWindowRect = function() {
-    const wx = 0;
-    const wy = this.helpAreaTop();
-    const ww = Graphics.boxWidth;
-    const wh = this.helpAreaHeight();
+    const wx = 0; const wy = this.helpAreaTop();
+    const ww = Graphics.boxWidth; const wh = this.helpAreaHeight();
     return new Rectangle(wx, wy, ww, wh);
 };
 
 Scene_MenuBase.prototype.createHelpWindow = function() {
     const caller = Retro.findCaller();
-    if (caller !== "MV") {if (PluginManager.isForMZ(caller)) {
+    if (caller !== "MV" && Retro.isForMZ(caller)) {
         this._helpWindow = new Window_Help(this.helpWindowRect());
         this.addWindow(this._helpWindow);
-    } else MV_MenuBase_help.call(this)}
-    else MV_MenuBase_help.call(this);
+    } else MV_MenuBase_help.call(this);
 };
 
 //gauge construction
@@ -338,46 +340,45 @@ function Sprite_Gauge() {this.initialize(...arguments)};
 
 Sprite_Gauge.prototype = Object.create(Sprite.prototype); Sprite_Gauge.prototype.constructor = Sprite_Gauge;
 
-Sprite_Gauge.prototype = { //in MZ Sprite_Gauge is an actual sprite, here it merely stores the gauge's data
-    initialize(battler, type) {this._battler = battler; this._statusType = type},
-    label() {return null}, labelColor() {return null}, valueColor() {return null},
-    gaugeColor1() {return null}, gaugeColor2() {return null},
-    currentValue() {
-        switch (this._statusType) {
-            case "hp": return this._battler.hp;
-            case "mp": return this._battler.mp;
-            case "tp": return this._battler.tp;
-        };
-    },
-    currentMaxValue() {
-        switch (this._statusType) {
-            case "hp": return this._battler.mhp;
-            case "mp": return this._battler.mmp;
-            case "tp": return this._battler.maxTp();
-        };
-    },
-    isMod() { //if there are no Sprite_Gauge functions for this gauge, no overwrite will be processed
-        var mod = this.label();
-        if (!mod) mod = this.labelColor(); if (!mod) mod = this.valueColor();
-        if (!mod) mod = this.gaugeColor1(); if (!mod) mod = this.gaugeColor2();
-        return mod ? true : false;
-    }
+//in MZ Sprite_Gauge is an actual sprite, here it merely stores the gauge's data
+Sprite_Gauge.prototype.initialize = function(battler, type) {this._battler = battler; this._statusType = type};
+Sprite_Gauge.prototype.label = function() {return null};
+Sprite_Gauge.prototype.labelColor = function() {return null};
+Sprite_Gauge.prototype.valueColor = function() {return null};
+Sprite_Gauge.prototype.gaugeColor1 = function() {return null};
+Sprite_Gauge.prototype.gaugeColor2 = function() {return null};
+Sprite_Gauge.prototype.currentValue = function() {
+    switch (this._statusType) {
+        case "hp": return this._battler.hp;
+        case "mp": return this._battler.mp;
+        case "tp": return this._battler.tp;
+    };
+};
+Sprite_Gauge.prototype.currentMaxValue = function() {
+    switch (this._statusType) {
+        case "hp": return this._battler.mhp;
+        case "mp": return this._battler.mmp;
+        case "tp": return this._battler.maxTp();
+    };
+};
+Sprite_Gauge.prototype.isMod = function() { //if there are no Sprite_Gauge functions for this gauge, no overwrite will be processed
+    var mod = this.label();
+    if (!mod) mod = this.labelColor(); if (!mod) mod = this.valueColor();
+    if (!mod) mod = this.gaugeColor1(); if (!mod) mod = this.gaugeColor2();
+    return mod ? true : false;
 };
 
-Window_Base.prototype.drawActorHp = function(actor, x, y, width) {
-    width = width || 186;
+Window_Base.prototype.drawActorHp = function(actor, x, y, width) {width = width || 186;
     if (Retro.gaugeOverride && actor.hp_gauge.isMod()) this.gaugeOverwrite(actor, x, y, width, "hp");
     else MV_ActorGaugeHP.call(this, actor, x, y, width);
 };
 
-Window_Base.prototype.drawActorMp = function(actor, x, y, width) {
-    width = width || 186;
+Window_Base.prototype.drawActorMp = function(actor, x, y, width) {width = width || 186;
     if (Retro.gaugeOverride && actor.mp_gauge.isMod()) this.gaugeOverwrite(actor, x, y, width, "mp");
     else MV_ActorGaugeMP.call(this, actor, x, y, width);
 };
 
-Window_Base.prototype.drawActorTp = function(actor, x, y, width) {
-    width = width || 186;
+Window_Base.prototype.drawActorTp = function(actor, x, y, width) {width = width || 186;
     if (Retro.gaugeOverride && actor.tp_gauge.isMod()) this.gaugeOverwrite(actor, x, y, width, "tp");
     else MV_ActorGaugeTP.call(this, actor, x, y, width);
 };
@@ -418,9 +419,8 @@ Window_Base.prototype.gaugeOverwrite = function(battler, x, y, width, type) {
 
 Game_BattlerBase.prototype.initialize = function() { //adds gauge information to battlers
     MV_BattlerBase_init.call(this);
-    this.hp_gauge = new Sprite_Gauge(this, "hp");
-    this.mp_gauge = new Sprite_Gauge(this, "mp");
-    this.tp_gauge = new Sprite_Gauge(this, "tp");
+    this.hp_gauge = new Sprite_Gauge(this, "hp"); this.mp_gauge = new Sprite_Gauge(this, "mp");
+    this.tp_gauge = new Sprite_Gauge(this, "tp"); this.time_gauge = new Sprite_Gauge(this, "ct");
 };
 
 //various graphics-related stuff
@@ -428,6 +428,13 @@ Game_BattlerBase.prototype.initialize = function() { //adds gauge information to
 ImageManager.iconWidth = Window_Base._iconWidth; //MZ stores icon size in ImageManager, not the base window.
 ImageManager.iconHeight = Window_Base._iconHeight;
 Sprite.prototype.hide = function() {this.visible = false}; Sprite.prototype.show = function() {this.visible = true};
+Sprite.prototype.setHue = function(hue) {this.bitmap = ImageManager.loadNormalBitmap(this.bitmap.path, hue)};
+
+ImageManager.loadNormalBitmap = function(path, hue) {
+    var bitmap = MV_ImageManager_loadNormBit.call(this, path, hue)
+    if (!hue) bitmap.path = path;
+    return bitmap;
+};
 
 //MZ's textState handling. Will eventually try to trim down if possible. Was copied wholesale from MZ functions.
 
@@ -439,7 +446,6 @@ Window_Base.prototype.createTextState = function(text, x, y, width) {
     textState.startX = textState.x; textState.startY = textState.y;
     textState.rtl = rtl; textState.buffer = this.createTextBuffer(rtl);
     textState.drawing = true; textState.outputWidth = 0; textState.outputHeight = 0;
-    console.log(PluginManager.isForMZ(Retro.findCaller()))
     return textState;
 };
 
@@ -471,7 +477,31 @@ Window_Base.prototype.processControlCharacter = function(textState, c) {
 
 Window_Base.prototype.processNormalCharacter = function(textState) {
     if (textState.hasOwnProperty("drawing") && textState.drawing == false) {//MZ sometimes processes textState data without drawing it.
-        var c = textState.text[textState.index++]; var w = this.textWidth(c);
-        textState.x += w;
-    } else MV_procNormChar.call(this, textState);
+        var c = textState.text[textState.index++]; textState.x += this.textWidth(c);
+    } else MV_ProcNormChar.call(this, textState);
+};
+
+Scene_Boot.prototype.start = function() {
+    if (!DataManager.isBattleTest() && !DataManager.isEventTest()) {
+        Scene_Base.prototype.start.call(this);
+        SoundManager.preloadImportantSounds();
+        this.startNormalGame();
+        this.updateDocumentTitle();
+    } else MV_SceneBoot_start.call(this);
+}
+
+Scene_Boot.prototype.startNormalGame = function() {
+    this.checkPlayerLocation();
+    DataManager.setupNewGame();
+    SceneManager.goto(Scene_Title);
+    Window_TitleCommand.initCommandPosition();
+};
+
+//Compatibility functions
+//note: the functions here are only if they need to be modified to allow a certain plugin to work, and not needed otherwise.
+//If a function is already modified for RETRO functionality in general, any specific compatibility requirements will be there instead.
+
+Window_Base.prototype.textColor = function(n) {
+    if (n > 31 && Imported.CGMZ_InfiniteColors) return ColorManager.textColor(n);
+    return MV_WindowBase_textColor.call(this, n);
 };
