@@ -65,7 +65,7 @@ Function Trace - A lot of functions in MV and MZ are the same. Some are nearly i
 Plugin Scanning - In order for RETRO to adequately handle MZ plugin commands, as well as determine proper overwrites of certain functions, RETRO has the ability to load a plugin's text, looking for specific things. In this case, anything dealing with plugin command information as well as MZ function overwrites that should affect MV equivalents in the right order. RETRO does not alter the plugin in question, it only reads the text and filters out stuff it doesn't care about to find what it needs, the original file is left untouched.
 
 ---------Version History--------
-v0.10 - 
+v0.10 - 6/4/21
 	Added clickable sprite object.
         Added functionality for TouchInput movement when not being pressed.
         Added formatting for struct arguments in plugin commands.
