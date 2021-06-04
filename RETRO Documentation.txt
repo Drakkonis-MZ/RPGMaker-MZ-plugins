@@ -1,0 +1,102 @@
+This document is intended to provide in-depth explanations of RETRO's functionality, both for the curious, and for those attempting to diagnose a problem in the case of unexpected and unintended MZ plugin behavior. For each section, any known issues or currently planned updates is listed at the bottom of the section in question, labelled as "WIP". If you encounter an issue and a WIP entry related to the issue exists in this documentation, it is likely the issue will be addressed in a future update. This is not an exhaustive document, it merely hits the major highlights.
+
+Current features:
+
+---------ColorManager-----------
+ColorManager manages various color-related functions in MZ, but it doesn't exist in MV. The same functions exist, but are tied to the windows using them. The main function used is ColorManager.textColor(color), and here is routed to a specially created window using the default system window skin. The window itself is never shown and is only used for its color function. Most other ColorManager functions route to their MV window counterparts.
+
+WIP: Possible incompatibility with plugins that allow dynamic changes to window skins, or different skins per individual window. The window ColorManager references currently uses the default window skin.
+
+-----------Windows--------------
+Windows in MV are created with location and size parameters, and in MZ are created with a special object that contains those parameters. Most window creation functions route through the base window, so RETRO uses that base window creation function to detect the argument style and converts it to MV's style if needed.
+
+-----------Scenes---------------
+Basic scene construction is now functional. A lot of MZ scenes are built using references to certain other elements to determine their size and placement. Most of the other windows use the help window's location and size as their reference points. In MV, the help window's location is set in stone, but in MZ, it can theoretically be anywhere, but is most commonly set on the top or bottom of the screen, depending on a variable set for the scene in question. RETRO is able to determine the intended position for the help window, allowing the MZ-style modular scene construction to work as intended without changing how an MV scene is constructed.
+
+-----------Gauges---------------
+Sprite_Gauge functions are implemented, but the object is different. In MZ, the gauges are their own independent sprites, where in MV, the gauges are drawn directly on the window. RETRO instead stores the gauge sprite information in an object for each gauge and attaches that information to each battler, then uses the native gauge drawing methods using that information. Since MV and MZ use completely separate processes for gauges and plugin order isn't currently detected by RETRO, it doesn't know if an MZ plugin that has sprite gauge functions is after, and thus "overwriting", an MV plugin that modifies the gauge drawing, so I've added a parameter to handle that. If Gauge Overwrite is turned on, RETRO checks to see if there is any custom sprite gauge data defined for the gauge in question. If there is, it uses that information to draw the gauge. Otherwise the native function is used.
+
+WIP: Functionality to allow RETRO to detect if the MV or MZ functions should be used for status gauges based on plugin order is currently in the works, and half of the work for it is done. Rigorous testing is required on the other half.
+
+WIP: Currently, the Sprite_Gauge functions only apply to the default status gauges in the menu and the battle status window. Any other status gauge locations provided by other plugins is not tested and likely non-functional.
+
+-------MZ Plugin Commands-------
+Plugin commands are handled COMPLETELY differently between the engines, and RETRO's implementation will require you to be able to find certain lines in the code of the plugin you wish to use. The use of OcRam's RETRO Plugin Command UI is highly recommended here, especially for more complex commands. It is designed to automatically build the proper string for any given MZ plugin, with a UI resembling that found in MZ's plugin manager. But if you cannot or will not use the UI, read the following information CAREFULLY. Any mistakes in the string format and syntax WILL result in, at best, unintended results from the command, and a complete game crash at worst.
+
+In the comment block at the top of a plugin, the author will list various parameters using "@". For any plugin with commands, they will have those commands listed with "@command". When using MV's plugin command feature, this is the command name you'll type in, with any spaces replaced with an underscore(_). If the command has arguments, they are listed below the command with "@arg". You MIGHT need to look at the entire arg parameter or even the function the command calls to make sure you know what the argument should be(for example, if they are pre-set options, and especially if the text of the option differs from its actual value). Also take note of the order the arguments are listed in. Then type the values you want for those arguments in the same order the arguments are listed in. The order is IMPORTANT, since MZ handles plugin args with its own UI that MV doesn't have, forcing RETRO to handle the arguments a certain way.
+
+You'll also need the plugin's name, so that the function knows which plugin to use, since some plugins may have the same command names. This is usually the name of the js file. Again, any spaces present must be replaced with underscores(_).
+
+The command is written using "plugin name"/"command name", with arguments listed after as normal. The plugin name and command name MUST be without spaces, separated by a forward slash.
+
+There are a few things to note when typing in the arguments. Because MV plugin commands require each argument to be separated by a space, a single argument that consists of a string with multiple words isn't possible. MZ doesn't have this restriction. To accommodate this, RETRO allows multi-word string arguments by encapsulating the entire string argument with double quotes(ex. "Hello World!"). Any amount of words inside a set of double quotes will count as a single argument. NOTE: ONLY double quotes enable this functionality, single quotes(') will do nothing.
+
+As a result of the above, if you wish a string argument to have a double quote IN the value, you'll need to escape it, like this: \". This allows RETRO to know that the quote is intended to be PART of the argument.
+
+In some situations, you might wish to omit an argument value. However, the argument cannot be skipped when inputting the command string, or it will throw off every argument afterwards. There are two solutions for this.
+
+The first is to have an underscore (_) in place of the argument. This will tell RETRO to use the default value for that argument, if the plugin developer has defined it. If there is no default defined, the argument will be left as a blank string.
+
+If you want to force the argument to be blank, the underscore must be escaped(\_). This will tell RETRO to make the argument a blank string no matter what.
+
+NOTE: Either of these approaches may lead to unintended consequences if the command in question REQUIRES something other than a blank string. Use with caution.
+
+Array and object arguments are possible, but can be complicated. OcRam's RETRO Plugin Command UI is HEAVILY recommended for plugin commands that use these types of arguments, especially for object arguments, as they can get very complicated very fast. But if you insist on manually typing in every command and argument, proceed with caution.
+
+For arrays, the entire array will need to be encapsulated with straight brackets "[" and "]", with each array element separated by a comma. Ex: [num0,num1,num2].
+
+For objects, known as "structs" for the purposes of plugin arguments, the entire object must be encapsulated with curly brackets "{" and "}". Inside these brackets are property name and value pairs separated by colons and commas, like so: {property1:value1,property2:value2}. It is recommended that the property names are in quotes, but it is not required. The value will need to be in quotes if it is a string.
+
+For complex or frequently used commands and arguments, RETRO has shortcut functionality for MZ plugin commands, set up in the plugin manager. When you set up a shortcut, you'll enter the plugin and command name as you would when using the Plugin Command event command, but without arguments. Then, when using the event command, you can type MZcmdX for the command name, where X is the number next to the shortcut you set up. If you wish, you may even set up argument shortcuts for those commands. Argument shortcuts can ONLY be set up for a command shortcut, and can only be used with that shortcut. To create an argument shortcut, navigate to the command shortcut you want, add a new argument shortcut and set the text to be whatever you would type in as the arguments for the command. To use the shortcut, type in MZargX, where X is the number next to the shortcut you set up. Remember, each argument shortcut is tied to a command shortcut, and cannot be used independently. Example use: "MZcmd3 MZarg2" in the event command would correspond to the second argument shortcut set up for the third command shortcut in the list.
+
+WIP: While it is possible to have an array as a value inside an object, or an object as an element of an array, RETRO currently cannot handle arrays within arrays or objects within objects. While MV and MZ CAN handle this kind of argument structure, RETRO is currently unable to correctly parse it, and any command using arguments of this type WILL crash the engine. This is a known issue and is being worked on for the next release, at which time this document will be updated.
+
+------Misc. RETRO Features------
+This section is for those who are curious about other stuff RETRO has going on underneath the hood. Stuff mentioned here help RETRO do its job, but aren't exactly related to how an MZ function or feature is turned into its MV counterpart. Currently this has 3 main sections.
+
+Polyfills/extensions - There are four extensions to array and string objects, two of which are implemented in versions of JavaScript later than what MV natively uses. If the dev or play environment doesn't contain/support them, RETRO adds them. The other two are useful features either implemented by RETRO or to enable plugins that use them.
+-Polyfill String.matchAll(regex) - returns an array with information regarding instances of a given regex inside the string.
+-Polyfill String.replaceAll(substring) - replaces all instances of a substring with another substring.
+-Extension Array.replaceAll(substring) - applies the String.replaceAll function to every element in the array.
+-Extension Array.remove(element) - removes the first instance of an element from the array.
+
+Function Trace - A lot of functions in MV and MZ are the same. Some are nearly identical, but have slightly different requirements. Some of them are required to do different things by the plugins that call them, depending on if they are MV or MZ plugins. RETRO has a function to determine if certain functions are being called by an MZ plugin or not, to determine which behavior those functions should perform.
+
+Plugin Scanning - In order for RETRO to adequately handle MZ plugin commands, as well as determine proper overwrites of certain functions, RETRO has the ability to load a plugin's text, looking for specific things. In this case, anything dealing with plugin command information as well as MZ function overwrites that should affect MV equivalents in the right order. RETRO does not alter the plugin in question, it only reads the text and filters out stuff it doesn't care about to find what it needs, the original file is left untouched.
+
+---------Version History--------
+v0.10 - 
+	Added clickable sprite object.
+        Added functionality for TouchInput movement when not being pressed.
+        Added formatting for struct arguments in plugin commands.
+        Added array replaceAll as an extension of the string version.
+        Console warnings provided for plugins that have an order defined using functionality introduced in MZ.
+        Added a shortcut feature for MZ plugin commands.
+        Added support for various MZ plugin command argument types, including objects, arrays, and multi-word strings.
+        Contributions from OcRam:
+        Bug fix for MZ plugin commands that don't have arguments.
+        Added matchAll string regex function for environments that don't have it(polyfill).
+        Added replaceAll string function polyfill.
+        Added remove array function polyfill.
+        Added ability for MZ plugins to call user-defined plugin commands from other plugins through MZ plugin command functions.
+        Various property definitions that are named SLIGHTLY differently in MZ. (".*" vs "._*", where * is the same name otherwise)
+        A few miscellaneous window-related functions.
+        MZ tile drawing functions added.
+v0.05 - 5/5/21
+	Overhauled MZ plugin command functions.
+        Implemented MZ sprite hue changes.
+        Fixed an issue with stat gauges that would cause a crash after loading a save file.
+v0.04 - 4/26/21
+	Fixed a small bug with the updated plugin command code.
+        Added ImageManager.icon size data.
+        EquipSlot.drawItem now passes width to drawItemName.
+        Added MZ's textState functions.
+        Fixed help window positioning without breaking the native one.
+        Implemented a function to see if an MZ plugin is calling a shared function. Sometimes they pass different arguments.
+v0.03 - 4/23/21
+	Sprite_Gauge functions implemented, with a param to control overwriting of the native gauge drawing.
+        Fixed an issue in the plugin command code that was preventing the plugin manager from displaying RETRO's information.
+v0.02 - 4/22/21
+	ColorManager more fully implemented, some scene construction enabled.
+v0.01 - 4/21/21
+	Initial unstable release.
