@@ -53,7 +53,9 @@ like normal, and you will be restricted to the 32 colors in its palette.
 */
 var Imported = Imported || {};
 Imported.DrakColors = true;
-const infParams = PluginManager.convertParams("Drak_InfiniteColors");
+const infParams = PluginManager.parameters("Drak_InfiniteColors");
+infParams.rowSize = parseInt(infParams.rowSize);
+infParams.sampleSize = parseInt(infParams.sampleSize);
 
 const _CMloadSkin = ColorManager.loadWindowskin;
 const _CMtextColor = ColorManager.textColor;
