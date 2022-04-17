@@ -1,7 +1,7 @@
 /*:
 @author Drakkonis
 @plugindesc This plugin aims to make most MZ plugins compatible with MV.
-@version 0.10
+@version 0.11
 @url https://forums.rpgmakerweb.com/index.php?threads/retro-mz-plugins-on-mv.135715/
 
 @param gaugeOverride
@@ -16,6 +16,7 @@
 @text Plugin Command Shortcuts
 @desc The plugin commands to set shortcuts for. Use "MZcmdX" in plugin command. X is the index number.
 @type struct<cmd>[]
+@default []
 
 @help
 -------------------------------------------------------------------------
@@ -106,6 +107,10 @@ command would correspond to the second argument shortcut set up for the
 third command shortcut in the list.
 
 Version History:
+v0.11 - 4/17/22
+Added a default parameter for MZ command shortcuts.
+Fixed an issue with the replaceAll polyfill.
+
 v0.10 - 6/4/21
 Added clickable sprite object.
 Added functionality for TouchInput movement when not being pressed.
@@ -137,7 +142,7 @@ commercial or otherwise, provided proper credit is given. RETRO shall
 also always be free to obtain.
 
 If you use RETRO in your project, please credit the following:
-Drakkonis - Me. I started RETRO and am the primary devoloper.
+Drakkonis - Me. I started RETRO and am the primary developer.
 Restart - Developer of FOSSIL, which is the direct inspiration for
     RETRO. While he has not directly contributed anything to RETRO,
     it literally would not have been started without his creation of
@@ -351,7 +356,7 @@ Array.prototype.replaceAll = function(search, replace) {let ret = [];
 
 Retro.processArgs = function(args) {
     let temp = "", i = 0;
-    args = args.replaceAll(/\\"/, "\\x22"); //substitutes escaped double quotes
+    args = args.replaceAll('\\"', '\\x22'); //substitutes escaped double quotes
     for (i = 0; i < args.length; i++) {
         if (args[i].charAt(0) == '"') {//double quotes to denote a single string arg containing spaces
             for (let i2 = i; i2 < args.length; i2++) {
@@ -596,8 +601,15 @@ Game_BattlerBase.prototype.initialize = function() { //adds gauge information to
 
 //various graphics-related stuff
 
-ImageManager.iconWidth = Window_Base._iconWidth; //MZ stores icon size in ImageManager, not the base window.
-ImageManager.iconHeight = Window_Base._iconHeight;
+//MZ stores icon size in ImageManager, not the base window.
+Object.defineProperty(ImageManager, "iconWidth", {
+    get: function() {return Window_Base._iconWidth}
+});
+
+Object.defineProperty(ImageManager, "iconHeight", {
+    get: function() {return Window_Base._iconHeight}
+});
+
 Sprite.prototype.hide = function() {this.visible = false}; Sprite.prototype.show = function() {this.visible = true};
 Sprite.prototype.setHue = function(hue) {this.bitmap = ImageManager.loadNormalBitmap(this.bitmap.path, hue)};
 
@@ -799,7 +811,7 @@ for (const cmd in Game_Interpreter.prototype) {
 
 Tilemap.prototype._addAllSpots = function (startX, startY) {
     const tileCols = Math.ceil(this._width / this._tileWidth) + 1, tileRows = Math.ceil(this._height / this._tileHeight) + 1;
-    for (let y = 0; y < tileRows; y++) {for (let x = 0; x < tileCols; x++) {this._paintTiles(startX, startY, x, y)}}
+    for (let y = 0; y < tileRows; y++) {for (let x = 0; x < tileCols; x++) {this._paintTiles(startX, startY, x, y)}};
 };
 
 Tilemap.prototype._paintAllTiles = function (startX, startY) {this._addAllSpots(startX, startY)};
